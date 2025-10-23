@@ -1,0 +1,302 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Cross-browser compatibility fixes */
+@supports (-webkit-touch-callout: none) {
+  /* Safari specific styles */
+  body {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}
+
+/* Standard property with vendor prefix for Safari */
+* {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* For text elements that should be selectable */
+p, h1, h2, h3, h4, h5, h6, a, li, span, div, input, textarea, button, select, label {
+  -webkit-user-select: text;
+  -moz-user-select: text;
+  -ms-user-select: text;
+  user-select: text;
+}
+
+/* Performance optimization for animations */
+@keyframes gentle-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Use transform and opacity for better performance */
+.animate-gentle-float {
+  animation: gentle-float 6s ease-in-out infinite;
+  will-change: transform;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* Care Connect Design System - Healthcare Themed */
+
+@layer base {
+  :root {
+    /* Healthcare Color Palette */
+    --background: 0 0% 100%;
+    --foreground: 215 25% 27%;
+    
+    /* Medical Blues - Primary Brand */
+    --primary: 207 90% 61%;
+    --primary-light: 207 90% 75%;
+    --primary-dark: 207 90% 45%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Healing Greens - Secondary */
+    --secondary: 152 57% 67%;
+    --secondary-light: 152 57% 80%;
+    --secondary-foreground: 215 25% 27%;
+    
+    /* Calming Lavender - Accent */
+    --accent: 260 30% 80%;
+    --accent-light: 260 30% 90%;
+    --accent-foreground: 215 25% 27%;
+    
+    /* Medical Trust Colors */
+    --trust-blue: 217 91% 60%;
+    --healing-green: 158 64% 52%;
+    --gentle-purple: 267 57% 78%;
+    
+    /* Gradients */
+    --gradient-primary: linear-gradient(135deg, hsl(207 90% 61%), hsl(152 57% 67%));
+    --gradient-hero: linear-gradient(135deg, hsl(207 90% 95%), hsl(152 57% 95%));
+    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(207 90% 98%));
+    
+    /* Soft Medical Shadows */
+    --shadow-gentle: 0 2px 15px hsl(207 90% 61% / 0.08);
+    --shadow-card: 0 4px 25px hsl(207 90% 61% / 0.12);
+    --shadow-float: 0 8px 35px hsl(207 90% 61% / 0.15);
+    --shadow-glow: 0 0 25px hsl(207 90% 61% / 0.25);
+    
+    /* Animation Timings */
+    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+    /* UI Components */
+    --card: 0 0% 100%;
+    --card-foreground: 215 25% 27%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 25% 27%;
+
+    --muted: 207 90% 97%;
+    --muted-foreground: 215 15% 57%;
+
+    --destructive: 0 75% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 207 40% 91%;
+    --input: 207 40% 95%;
+    --ring: 207 90% 61%;
+
+    --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 215 30% 7%;
+    --foreground: 207 90% 95%;
+    
+    --primary: 207 90% 65%;
+    --primary-foreground: 215 30% 7%;
+    
+    --secondary: 152 57% 60%;
+    --secondary-foreground: 215 30% 7%;
+    
+    --accent: 260 30% 70%;
+    --accent-foreground: 215 30% 7%;
+    
+    --card: 215 30% 10%;
+    --card-foreground: 207 90% 95%;
+    
+    --muted: 215 30% 15%;
+    --muted-foreground: 215 15% 70%;
+    
+    --border: 215 30% 20%;
+    --input: 215 30% 20%;
+    --ring: 207 90% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    margin: 0;
+    padding: 0;
+  }
+  
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@layer components {
+  /* Hero Section Styles */
+  .hero-gradient {
+    background: var(--gradient-hero);
+  }
+  
+  .hero-fullscreen {
+    width: 100vw;
+    height: 100vh;
+    min-height: 100vh;
+    /* Ensure full coverage on all devices */
+    background-attachment: fixed;
+    /* Prevent scrollbars */
+    overflow: hidden;
+  }
+  
+  /* Mobile-specific adjustments */
+  @media (max-width: 768px) {
+    .hero-fullscreen {
+      background-attachment: scroll; /* Better performance on mobile */
+    }
+  }
+  
+  /* Print-specific styles */
+  @media print {
+    .no-print {
+      display: none !important;
+    }
+    
+    .print-content {
+      background: white !important;
+      color: black !important;
+    }
+    
+    .print-content .bg-primary,
+    .print-content .bg-secondary,
+    .print-content .bg-accent {
+      background: #f0f0f0 !important;
+      color: black !important;
+    }
+    
+    .print-content .text-primary,
+    .print-content .text-secondary,
+    .print-content .text-accent {
+      color: black !important;
+    }
+    
+    .print-content .border {
+      border: 1px solid #ccc !important;
+    }
+    
+    .print-content .shadow-lg,
+    .print-content .shadow-xl {
+      box-shadow: none !important;
+    }
+  }
+  
+  .primary-gradient {
+    background: var(--gradient-primary);
+  }
+  
+  .card-gradient {
+    background: var(--gradient-card);
+  }
+  
+  /* Medical Themed Animations */
+  .animate-gentle-float {
+    animation: gentle-float 6s ease-in-out infinite;
+  }
+  
+  .animate-pulse-soft {
+    animation: pulse-soft 3s ease-in-out infinite;
+  }
+  
+  .animate-slide-up {
+    animation: slide-up 0.6s ease-out;
+  }
+  
+  .animate-fade-in {
+    animation: fade-in 0.8s ease-out;
+  }
+  
+  /* Button Variants */
+  .btn-medical {
+    @apply bg-primary text-primary-foreground px-6 py-3 rounded-xl font-medium;
+    @apply hover:shadow-lg transition-all duration-300;
+    @apply hover:scale-105 active:scale-95;
+  }
+  
+  .btn-outline-medical {
+    @apply border-2 border-primary text-primary bg-transparent px-6 py-3 rounded-xl font-medium;
+    @apply hover:bg-primary hover:text-primary-foreground transition-all duration-300;
+    @apply hover:shadow-lg hover:scale-105 active:scale-95;
+  }
+  
+  /* Card Styles */
+  .medical-card {
+    @apply bg-card border border-border rounded-2xl p-6;
+    box-shadow: var(--shadow-card);
+    @apply hover:shadow-lg transition-all duration-300;
+  }
+  
+  /* Input Styles */
+  .medical-input {
+    @apply w-full px-4 py-3 rounded-xl border border-input bg-background;
+    @apply focus:ring-2 focus:ring-primary focus:border-transparent;
+    @apply transition-all duration-300;
+  }
+}
+
+@keyframes gentle-float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  33% { transform: translateY(-10px) rotate(1deg); }
+  66% { transform: translateY(-5px) rotate(-1deg); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.02); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
