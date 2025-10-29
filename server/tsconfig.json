@@ -12,7 +12,8 @@
     "resolveJsonModule": true,
     "noImplicitAny": false,
     "strictNullChecks": false,
-    "strictPropertyInitialization": false
+    "strictPropertyInitialization": false,
+    "strictFunctionTypes": false
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
