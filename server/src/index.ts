@@ -130,6 +130,7 @@ const io = new Server(server, {
   transports: ['websocket', 'polling'],
   // Enable CORS with security settings
   allowEIO3: true,
+  allowUpgrades: true,
   cors: {
     origin: (origin, callback) => {
       // Allow requests with no origin (like mobile apps or curl requests)
@@ -157,11 +158,6 @@ const io = new Server(server, {
   cookie: false,
   serveClient: false,
   maxHttpBufferSize: 1e8, // 100MB max payload size
-  // WebSocket settings
-  allowEIO3: true,
-  allowUpgrades: true,
-  // Transport settings
-  transports: ['websocket', 'polling'],
   // Compression settings
   perMessageDeflate: {
     threshold: 1024, // Size threshold in bytes for compression
