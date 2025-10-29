@@ -85,8 +85,15 @@ export const Navbar = () => {
               size="sm"
               onClick={() => setIsOpen(!isOpen)}
               className="text-foreground hover:text-primary"
+              aria-label={isOpen ? 'Close menu' : 'Open menu'}
+              title={isOpen ? 'Close menu' : 'Open menu'}
             >
-              {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+              {isOpen ? (
+                <X className="h-6 w-6" aria-hidden="true" />
+              ) : (
+                <Menu className="h-6 w-6" aria-hidden="true" />
+              )}
+              <span className="sr-only">{isOpen ? 'Close menu' : 'Open menu'}</span>
             </Button>
           </div>
         </div>

@@ -42,6 +42,31 @@ medicationsRouter.get('/', async (req: Request, res: Response) => {
 });
 
 // Get medications for a specific patient
+// Get medication statistics
+medicationsRouter.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const stats = {
+      total: await Medication.countDocuments(),
+      takenToday: await Medication.countDocuments({
+        status: 'taken',
+        'lastTaken': {
+          $gte: new Date().setHours(0, 0, 0, 0),
+          $lt: new Date().setHours(23, 59, 59, 999)
+        }
+      }),
+      pending: await Medication.countDocuments({ status: 'pending' }),
+      asNeeded: await Medication.countDocuments({ status: 'as_needed' }),
+      remindersSet: await Medication.countDocuments({ isReminderSet: true })
+    };
+    
+    res.json(stats);
+  } catch (error) {
+    console.error('Error fetching medication stats:', error);
+    res.status(500).json({ message: 'Failed to fetch medication statistics' });
+  }
+});
+
+// Get medications for a specific patient
 medicationsRouter.get('/patient/:patientId', async (req: Request, res: Response) => {
   const { patientId } = req.params;
   
@@ -119,10 +144,24 @@ medicationsRouter.put('/:id', authorizeRoles('doctor', 'nurse', 'admin'), async 
 });
 
 // Delete medication
-medicationsRouter.delete('/:id', authorizeRoles('admin'), async (req: Request, res: Response) => {
+medicationsRouter.delete('/:id', authorizeRoles('admin', 'doctor', 'nurse'), async (req: Request, res: Response) => {
   const { id } = req.params;
+  const user = req.user!;
   
   try {
+    // For non-admin users, verify they have permission to delete this medication
+    if (user.role !== 'admin') {
+      const medication = await Medication.findById(id);
+      if (!medication) {
+        return res.status(404).json({ message: 'Medication not found' });
+      }
+      
+      // Check if the user is the one who prescribed the medication
+      if (medication.prescribedBy && medication.prescribedBy.toString() !== user.sub) {
+        return res.status(403).json({ message: 'You can only delete medications you prescribed' });
+      }
+    }
+    
     const deleted = await Medication.findByIdAndDelete(id);
     if (!deleted) {
       return res.status(404).json({ message: 'Medication not found' });
@@ -132,6 +171,54 @@ medicationsRouter.delete('/:id', authorizeRoles('admin'), async (req: Request, r
   } catch (error) {
     console.error('Error deleting medication:', error);
     res.status(500).json({ message: 'Failed to delete medication' });
+  }
+});
+
+// Toggle medication reminder
+medicationsRouter.patch('/:id/reminder', authenticateJwt, async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { isReminderSet, reminderTime } = req.body;
+  const user = req.user!;
+  
+  try {
+    const updateData: any = { 
+      isReminderSet,
+      ...(reminderTime && { reminderTime })
+    };
+    
+    // For non-admin users, verify they have permission to update this medication
+    if (user.role !== 'admin') {
+      const medication = await Medication.findById(id);
+      if (!medication) {
+        return res.status(404).json({ message: 'Medication not found' });
+      }
+      
+      // Patients can only update their own medication reminders
+      if (user.role === 'patient' && medication.patientId.toString() !== user.sub) {
+        return res.status(403).json({ message: 'You can only update your own medication reminders' });
+      }
+      
+      // Medical staff can update reminders for medications they prescribed
+      if ((user.role === 'doctor' || user.role === 'nurse') && 
+          medication.prescribedBy && medication.prescribedBy.toString() !== user.sub) {
+        return res.status(403).json({ message: 'You can only update reminders for medications you prescribed' });
+      }
+    }
+    
+    const updated = await Medication.findByIdAndUpdate(
+      id,
+      { $set: updateData },
+      { new: true }
+    ).populate('patientId', 'name status').populate('prescribedBy', 'name role');
+    
+    if (!updated) {
+      return res.status(404).json({ message: 'Medication not found' });
+    }
+    
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating medication reminder:', error);
+    res.status(500).json({ message: 'Failed to update medication reminder' });
   }
 });
 

@@ -1,3 +1,4 @@
+import React from 'react';
 import { useParams, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { DashboardLayout } from "@/components/dashboard/DashboardLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -15,9 +16,13 @@ import { Appointments } from "@/pages/dashboard/Appointments";
 import { MedicalRecords } from "@/pages/dashboard/MedicalRecords";
 import { Prescriptions } from "@/pages/dashboard/Prescriptions";
 import { PatientCare } from "@/pages/dashboard/PatientCare";
-import { Medications } from "@/pages/dashboard/Medications";
+import Medications from "@/pages/dashboard/Medications";
 import { Rounds } from "@/pages/dashboard/Rounds";
 import { Alerts } from "@/pages/dashboard/Alerts";
+
+interface DashboardProps {
+  role?: string;
+}
 import { MyHealth } from "@/pages/dashboard/MyHealth";
 import { TestResults } from "@/pages/dashboard/TestResults";
 import { PatientStatus } from "@/pages/dashboard/PatientStatus";
@@ -36,8 +41,9 @@ import { VolunteerReports } from "@/pages/dashboard/VolunteerReports";
 import { EmergencySOS } from "@/components/dashboard/EmergencySOS";
 import { AnimatePresence, motion } from "framer-motion";
 
-export const Dashboard = () => {
-  const { role } = useParams<{ role: string }>();
+export const Dashboard: React.FC<DashboardProps> = ({ role: propRole }) => {
+  const params = useParams<{ role: string }>();
+  const role = propRole || params.role;
   const location = useLocation();
   
   if (!role) {

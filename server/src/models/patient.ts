@@ -29,6 +29,12 @@ export interface IPatient extends Document {
   insurancePolicyNumber?: string;
   primaryPhysician?: mongoose.Types.ObjectId;
   assignedNurse?: mongoose.Types.ObjectId;
+  assignedNurses: mongoose.Types.ObjectId[];
+  lastUpdatedBy?: {
+    userId: mongoose.Types.ObjectId;
+    role: string;
+    timestamp: Date;
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -129,6 +135,15 @@ const PatientSchema = new Schema<IPatient>(
     assignedNurse: { 
       type: Schema.Types.ObjectId, 
       ref: 'User' 
+    },
+    assignedNurses: [{
+      type: Schema.Types.ObjectId,
+      ref: 'User'
+    }],
+    lastUpdatedBy: {
+      userId: { type: Schema.Types.ObjectId, ref: 'User' },
+      role: { type: String },
+      timestamp: { type: Date, default: Date.now }
     },
   },
   { 

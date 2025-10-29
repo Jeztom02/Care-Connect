@@ -63,45 +63,148 @@ export function useApi<T>(
 // API utility functions
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-export const apiRequest = async (endpoint: string, options: RequestInit = {}) => {
-  const token = localStorage.getItem('authToken');
-  
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token && { Authorization: `Bearer ${token}` }),
-      ...options.headers,
-    },
-  });
+let isRefreshing = false;
+let refreshSubscribers: ((token: string) => void)[] = [];
 
-  if (!response.ok) {
-    // Try to parse JSON error, otherwise fallback to status text
-    let message = response.statusText || 'Request failed';
-    try {
-      const errorData = await response.json();
-      if (errorData && typeof errorData.message === 'string') {
-        message = errorData.message;
-      }
-    } catch {
-      // ignore JSON parse error
+const onTokenRefreshed = (token: string) => {
+  refreshSubscribers.forEach(callback => callback(token));
+  refreshSubscribers = [];
+};
+
+export const refreshAuthToken = async (): Promise<string | null> => {
+  try {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) return null;
+
+    const response = await fetch(`${API_BASE}/api/auth/refresh-token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refreshToken }),
+      credentials: 'include',
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to refresh token');
     }
-    throw new Error(message || `HTTP ${response.status}`);
-  }
 
-  // Handle 204 No Content gracefully
-  if (response.status === 204) {
-    return null as unknown as any;
-  }
+    const data = await response.json();
+    const { accessToken, user } = data;
 
-  // Attempt to parse JSON when content-type indicates JSON
-  const contentType = response.headers.get('content-type') || '';
-  if (contentType.includes('application/json')) {
-    return response.json();
+    if (accessToken && user) {
+      localStorage.setItem('authToken', accessToken);
+      localStorage.setItem('userRole', user.role);
+      localStorage.setItem('userName', user.name || user.email?.split('@')[0] || 'User');
+      return accessToken;
+    }
+    return null;
+  } catch (error) {
+    console.error('Failed to refresh token:', error);
+    // Clear auth state on refresh failure
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('userRole');
+    localStorage.removeItem('userName');
+    return null;
   }
+};
 
-  // Fallback: return text for non-JSON responses
-  return response.text();
+export const apiRequest = async (endpoint: string, options: RequestInit = {}): Promise<any> => {
+  let token = localStorage.getItem('authToken');
+  let response: Response;
+
+  const makeRequest = async (): Promise<Response> => {
+    return fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options.headers,
+      },
+      credentials: 'include', // Include cookies for session management
+    });
+  };
+
+  try {
+    response = await makeRequest();
+
+    // If unauthorized, try to refresh the token
+    if (response.status === 401 && !options.headers?.['x-retry']) {
+      if (!isRefreshing) {
+        isRefreshing = true;
+        try {
+          const newToken = await refreshAuthToken();
+          isRefreshing = false;
+          
+          if (newToken) {
+            token = newToken;
+            // Update the original request's Authorization header
+            const newHeaders = {
+              ...options.headers,
+              'Authorization': `Bearer ${newToken}`,
+              'x-retry': 'true', // Prevent infinite retry loops
+            };
+            
+            // Retry the original request with the new token
+            response = await makeRequest();
+          } else {
+            // If refresh failed, redirect to login
+            if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+              window.location.href = '/login';
+            }
+            throw new Error('Session expired. Please log in again.');
+          }
+        } catch (error) {
+          isRefreshing = false;
+          throw error;
+        }
+      } else {
+        // If we're already refreshing, wait for it to complete
+        await new Promise<void>((resolve) => {
+          const unsubscribe = (newToken: string) => {
+            token = newToken;
+            resolve();
+          };
+          refreshSubscribers.push(unsubscribe);
+        });
+        // Retry the original request with the new token
+        response = await makeRequest();
+      }
+    }
+
+    if (!response.ok) {
+      let message = response.statusText || 'Request failed';
+      try {
+        const errorData = await response.json();
+        if (errorData && typeof errorData.message === 'string') {
+          message = errorData.message;
+        }
+      } catch {
+        // ignore JSON parse error
+      }
+      
+      const error = new Error(message) as any;
+      error.status = response.status;
+      throw error;
+    }
+
+    // Handle 204 No Content
+    if (response.status === 204) {
+      return null;
+    }
+
+    // Parse response
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/json')) {
+      return response.json();
+    }
+
+    return response.text();
+  } catch (error) {
+    console.error(`API request failed for ${endpoint}:`, error);
+    throw error;
+  }
 };
 
 // Specific API hooks for different data types
@@ -197,10 +300,12 @@ export const useUsers = () => {
 
 // Patient users (joined with Patient docs): returns array with _id as Patient ID
 export const usePatientUsers = () => {
+  const role = typeof window !== 'undefined' ? localStorage.getItem('userRole') : null;
   return useApi(
     () => apiRequest('/api/users/patients'),
-    [],
+    [role],
     {
+      immediate: role !== 'patient',
       onError: (error) => {
         console.error('Failed to fetch patient users:', error);
       }

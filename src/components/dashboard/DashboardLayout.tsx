@@ -58,8 +58,11 @@ export const DashboardLayout = ({ children, userRole }: DashboardLayoutProps) =>
                 variant="ghost"
                 size="icon"
                 onClick={() => setSidebarState(prev => prev === 'closed' ? 'open' : (prev === 'open' ? 'closed' : 'open'))}
+                aria-label={sidebarState === 'open' ? 'Collapse sidebar' : 'Expand sidebar'}
+                title={sidebarState === 'open' ? 'Collapse sidebar' : 'Expand sidebar'}
               >
-                <Menu className="h-5 w-5" />
+                <Menu className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">{sidebarState === 'open' ? 'Collapse sidebar' : 'Expand sidebar'}</span>
               </Button>
               <h1 className="text-xl font-semibold text-foreground">
                 Care Connect Dashboard
@@ -70,14 +73,22 @@ export const DashboardLayout = ({ children, userRole }: DashboardLayoutProps) =>
                 <Search className="absolute left-3 h-4 w-4 text-muted-foreground" />
                 <Input placeholder="Search..." className="pl-9 w-[260px]" />
               </div>
-              <Button variant="ghost" size="icon">
-                <Bell className="h-5 w-5" />
+              <Button 
+                variant="ghost" 
+                size="icon"
+                aria-label="Notifications"
+                title="Notifications"
+              >
+                <Bell className="h-5 w-5" aria-hidden="true" />
+                <span className="sr-only">Notifications</span>
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={toggleDarkMode}
                 className="flex items-center gap-2"
+                aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
               >
                 {isDarkMode ? (
                   <>

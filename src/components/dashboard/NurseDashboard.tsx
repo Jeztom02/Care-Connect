@@ -7,10 +7,18 @@ import nurseService from "@/services/nurseService";
 import { format } from "date-fns/format";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/components/ui/use-toast";
-import { useState, useCallback } from "react";
-import { RecordVitalsDialog } from "@/components/nurse/RecordVitalsDialog";
+import { useState, useCallback, useRef } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { RecordMedicationDialog } from "@/components/nurse/RecordMedicationDialog";
-import type { Patient, Round, MedicationData, VitalsData } from "@/types/nurse";
+import { PatientVitalsForm } from "@/components/forms/PatientVitalsForm";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import type { Patient, Round, MedicationData } from "@/types/nurse";
 
 type Alert = {
   id: string;
@@ -22,14 +30,55 @@ type Alert = {
 export const NurseDashboard = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuth();
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [showVitalsDialog, setShowVitalsDialog] = useState(false);
   const [showMedicationDialog, setShowMedicationDialog] = useState(false);
+  const medicationFormRef = useRef<{ reset: () => void }>(null);
 
-  // Fetch nurse's patients
-  const { data: patients = [] as Patient[], isLoading: isLoadingPatients } = useQuery<Patient[]>({
+  // Fetch nurse's patients with automatic refetching
+  const { 
+    data: patients = [] as Patient[], 
+    isLoading: isLoadingPatients,
+    refetch: refetchPatients 
+  } = useQuery<Patient[]>({
     queryKey: ['nursePatients'],
-    queryFn: nurseService.getNursePatients,
+    queryFn: async () => {
+      try {
+        const data = await nurseService.getNursePatients();
+        return data || [];
+      } catch (error) {
+        console.error('Error fetching nurse patients:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load patients. Please try again.',
+          variant: 'destructive',
+        });
+        return [];
+      }
+    },
+    refetchOnWindowFocus: true,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Fetch patient vitals when a patient is selected
+  const { 
+    data: patientVitals = [], 
+    refetch: refetchVitals 
+  } = useQuery({
+    queryKey: ['patientVitals', selectedPatient?._id],
+    queryFn: () => selectedPatient ? patientCareApi.getVitals(selectedPatient._id) : [],
+    enabled: !!selectedPatient,
+  });
+
+  // Fetch patient notes when a patient is selected
+  const { 
+    data: patientNotes = [], 
+    refetch: refetchNotes 
+  } = useQuery({
+    queryKey: ['patientNotes', selectedPatient?._id],
+    queryFn: () => selectedPatient ? patientCareApi.getNotes(selectedPatient._id) : [],
+    enabled: !!selectedPatient,
   });
 
   // Fetch nurse's schedule
@@ -77,48 +126,84 @@ export const NurseDashboard = () => {
     },
   ];
 
-  // Handle record vitals
+  // Handle record vitals with proper invalidation
   const recordVitalsMutation = useMutation({
-    mutationFn: ({ patientId, vitalsData }: { patientId: string, vitalsData: Omit<VitalsData, 'recordedAt'> }) =>
+    mutationFn: ({ patientId, vitalsData }: { patientId: string, vitalsData: any }) =>
       nurseService.recordVitals(patientId, vitalsData),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nursePatients'] });
-      toast({
-        title: "Vitals recorded successfully",
-        description: "Patient's vital signs have been updated.",
+      // Invalidate and refetch all related queries
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['nursePatients'] }),
+        queryClient.invalidateQueries({ queryKey: ['patientVitals', selectedPatient?._id] }),
+        refetchPatients(),
+        refetchVitals()
+      ]).then(() => {
+        toast({
+          title: "Vitals recorded successfully",
+          description: "Patient's vital signs have been updated.",
+        });
+        setShowVitalsDialog(false);
       });
-      setShowVitalsDialog(false);
     },
     onError: (error: any) => {
+      console.error('Vitals recording error:', error);
       toast({
         title: "Error recording vitals",
-        description: error.response?.data?.message || "Failed to record vitals",
+        description: error.response?.data?.message || "Failed to record vitals. Please try again.",
         variant: "destructive",
       });
     },
   });
 
-  // Handle record medication
+  const handleRecordVitals = useCallback(async (data: any) => {
+    if (!selectedPatient) return;
+    
+    await recordVitalsMutation.mutateAsync({
+      patientId: selectedPatient._id,
+      vitalsData: {
+        ...data,
+        recordedBy: currentUser?.id || 'nurse',
+        recordedAt: new Date().toISOString()
+      }
+    });
+  }, [selectedPatient, recordVitalsMutation, currentUser]);
+
+  // Handle record medication with proper invalidation
   const recordMedicationMutation = useMutation({
-    mutationFn: (medicationData: Omit<MedicationData, 'time'> & { time?: Date }) => {
-      const dataToSend = {
+    mutationFn: (medicationData: Omit<MedicationData, 'time' | 'patientId'> & { time?: Date }) => {
+      if (!selectedPatient) throw new Error('No patient selected');
+      
+      const dataToSend: Omit<MedicationData, 'id'> = {
         ...medicationData,
-        time: medicationData.time || new Date()
+        patientId: selectedPatient._id,
+        time: medicationData.time || new Date(),
+        // Ensure required fields are present
+        prescriptionId: medicationData.prescriptionId || `temp-${Date.now()}`,
+        medication: medicationData.medication || 'Unknown',
+        dosage: medicationData.dosage || 'As directed'
       };
-      return nurseService.recordMedication(dataToSend as MedicationData);
+      
+      return nurseService.recordMedication(dataToSend);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['nursePatients'] });
-      toast({
-        title: "Medication recorded",
-        description: "Medication administration has been recorded.",
+      // Invalidate and refetch all related data
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['nursePatients'] }),
+        queryClient.invalidateQueries({ queryKey: ['patientMedications', selectedPatient?._id] }),
+        refetchPatients()
+      ]).then(() => {
+        toast({
+          title: "Medication recorded",
+          description: "Medication administration has been successfully recorded.",
+        });
+        setShowMedicationDialog(false);
       });
-      setShowMedicationDialog(false);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
+      console.error('Medication recording error:', error);
       toast({
         title: "Error recording medication",
-        description: error.response?.data?.message || "Failed to record medication",
+        description: error.message || "Failed to record medication. Please try again.",
         variant: "destructive",
       });
     },
@@ -212,40 +297,41 @@ export const NurseDashboard = () => {
       </div>
 
       {/* Dialogs */}
-      {selectedPatient && (
-        <>
-          <RecordVitalsDialog
-            open={showVitalsDialog}
-            onOpenChange={setShowVitalsDialog}
-            patient={selectedPatient}
-            onSave={(vitalsData) => {
-              if (selectedPatient) {
-                recordVitalsMutation.mutate({
-                  patientId: selectedPatient._id,
-                  vitalsData
-                });
-              }
-            }}
-            isLoading={recordVitalsMutation.isPending}
-          />
+      {/* Record Vitals Dialog */}
+      <Dialog open={showVitalsDialog} onOpenChange={setShowVitalsDialog}>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Record Patient Vitals</DialogTitle>
+            <DialogDescription>
+              {selectedPatient && `Record vital signs for ${selectedPatient.name}`}
+            </DialogDescription>
+          </DialogHeader>
           
-          <RecordMedicationDialog
-            open={showMedicationDialog}
-            onOpenChange={setShowMedicationDialog}
-            patient={selectedPatient}
-            onSave={(medicationData: Omit<MedicationData, 'patientId'>) => {
-              if (selectedPatient) {
-                recordMedicationMutation.mutate({
-                  ...medicationData,
-                  patientId: selectedPatient._id,
-                  time: medicationData.time || new Date()
-                });
-              }
-            }}
-            isLoading={recordMedicationMutation.isPending}
-          />
-        </>
-      )}
+          <div className="py-4">
+            {selectedPatient && (
+              <PatientVitalsForm
+                patientId={selectedPatient._id}
+                onSuccess={() => setShowVitalsDialog(false)}
+                onCancel={() => setShowVitalsDialog(false)}
+                onSubmit={handleRecordVitals}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Record Medication Dialog */}
+      <RecordMedicationDialog
+        open={showMedicationDialog}
+        onOpenChange={setShowMedicationDialog}
+        patient={selectedPatient}
+        onSave={(medicationData) => recordMedicationMutation.mutate({
+          ...medicationData,
+          patientId: selectedPatient._id,
+          time: medicationData.time || new Date()
+        })}
+        isLoading={recordMedicationMutation.isPending}
+      />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

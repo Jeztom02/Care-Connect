@@ -32,7 +32,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import type { Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
-import { setIO } from './socket';
+import { initializeSocket, getIO } from './socket';
 
 import { fileURLToPath } from 'url';
 import { securityHeaders } from './middleware/securityHeaders';
@@ -67,7 +67,7 @@ const corsOptions = {
     }
   },
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Cache-Control', 'Pragma'],
   exposedHeaders: ['Content-Range', 'X-Total-Count'],
   credentials: true,
   maxAge: 600, // 10 minutes
@@ -121,36 +121,89 @@ app.use(session({
 app.use(passport.initialize());
 app.use(passport.session());
 
-// HTTP server and Socket.IO
+// HTTP server
 const server = http.createServer(app);
+
+// Initialize Socket.IO with enhanced security and CORS
 const io = new Server(server, {
-  cors: { origin: ALLOWED_ORIGINS, credentials: true }
-});
-
-// Socket auth via JWT and join user room
-io.use((socket: Socket, next: (err?: Error) => void) => {
-  try {
-    const authHeader = (socket.handshake.headers.authorization as string) || '';
-    const tokenFromHeader = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-    const token = (socket.handshake.auth && (socket.handshake.auth as any).token) || tokenFromHeader;
-    if (!token) return next(new Error('Unauthorized'));
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'dev-secret-change-me') as any;
-    (socket.data as any).user = decoded;
-    return next();
-  } catch (e) {
-    return next(new Error('Unauthorized'));
+  // Configure transports
+  transports: ['websocket', 'polling'],
+  // Enable CORS with security settings
+  allowEIO3: true,
+  cors: {
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) return callback(null, true);
+      
+      // Check if the origin is in the allowed list or if we're in development
+      if (
+        ALLOWED_ORIGINS.includes(origin) || 
+        ALLOWED_ORIGINS.includes('*') ||
+        process.env.NODE_ENV === 'development'
+      ) {
+        return callback(null, true);
+      }
+      return callback(new Error('Not allowed by CORS'));
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  },
+  // Connection settings
+  pingTimeout: 30000, // 30 seconds
+  pingInterval: 25000, // 25 seconds
+  connectTimeout: 45000, // 45 seconds
+  // Security settings
+  cookie: false,
+  serveClient: false,
+  maxHttpBufferSize: 1e8, // 100MB max payload size
+  // WebSocket settings
+  allowEIO3: true,
+  allowUpgrades: true,
+  // Transport settings
+  transports: ['websocket', 'polling'],
+  // Compression settings
+  perMessageDeflate: {
+    threshold: 1024, // Size threshold in bytes for compression
+    zlibDeflateOptions: {
+      level: 3 // Compression level (0-9)
+    },
+    zlibInflateOptions: {
+      chunkSize: 10 * 1024 // 10KB chunks
+    }
+  },
+  // Request validation
+  allowRequest: (req, callback) => {
+    // Additional request validation can be done here
+    callback(null, true); // authorize the request
   }
 });
 
-io.on('connection', (socket: Socket) => {
-  const user = (socket.data as any).user;
-  const userId = user?.sub;
-  if (userId) {
-    socket.join(String(userId));
-  }
+// Initialize Socket.IO with our custom logic
+initializeSocket(io);
+
+// Handle WebSocket server errors
+io.engine.on('connection_error', (err) => {
+  console.error('WebSocket connection error:', err);
 });
 
-setIO(io);
+// Handle process termination
+const gracefulShutdown = () => {
+  console.log('Shutting down WebSocket server gracefully...');
+  io.close(() => {
+    console.log('WebSocket server closed');
+    process.exit(0);
+  });
+
+  // Force close after timeout
+  setTimeout(() => {
+    console.error('Forcing WebSocket server shutdown');
+    process.exit(1);
+  }, 10000);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
 // Routes
 app.get('/api/health', (_req: Request, res: Response) => {
@@ -287,7 +340,12 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
-    const token = signToken({ sub: String(user._id), role: user.role as any, email: user.email });
+    const token = signToken({ 
+      sub: String(user._id), 
+      role: user.role as any, 
+      email: user.email,
+      name: user.name
+    });
     console.log('[LOGIN] Success', { userId: String(user._id), role: user.role });
     return res.json({ token, user: { id: String(user._id), email: user.email, name: user.name, role: user.role } });
   } catch (err) {
@@ -481,7 +539,8 @@ app.get('/api/auth/google/callback',
       const token = signToken({ 
         sub: String(user._id), 
         role: user.role, 
-        email: user.email 
+        email: user.email,
+        name: user.name || '' // Add name field with fallback to empty string
       });
 
       // Redirect to frontend with token
@@ -526,39 +585,101 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   res.status(500).json({ message: err.message || 'Internal Server Error' });
 });
 
-connectMongo(MONGODB_URI).then(() => {
-  console.log('MongoDB connected', { uri: MONGODB_URI.split('@').pop() });
-  const maxAttempts = 5;
-  let started = false;
-  const start = (p: number, attempt: number) => {
-    if (started) return;
-    const onListening = () => {
-      if (started) return;
-      started = true;
-      console.log(`API listening on http://localhost:${p}`);
+// Start server
+const start = async (port: number, attempt = 1) => {
+  try {
+    // Connect to MongoDB
+    await connectMongo(MONGODB_URI);
+    
+    // Verify email transporter
+    await verifyTransporter();
+    
+    // Start HTTP server
+    return new Promise<void>((resolve, reject) => {
+    const logSocketInfo = () => {
+      // Use setImmediate to ensure this runs after the server has started
+      setImmediate(async () => {
+        try {
+          // Get connected clients count
+          const sockets = await io.fetchSockets();
+          console.log(`   - Active connections: ${sockets.length}`);
+          
+          // Log connected users count by role
+          const roles = ['doctor', 'nurse', 'admin', 'patient'];
+          const roleCounts: Record<string, number> = {};
+          
+          // Initialize counts to zero
+          roles.forEach(role => {
+            roleCounts[role] = 0;
+          });
+          
+          // Count users by role
+          sockets.forEach(socket => {
+            const userRole = (socket as any).user?.role;
+            if (userRole && roles.includes(userRole)) {
+              roleCounts[userRole]++;
+            }
+          });
+          
+          // Log non-zero role counts
+          Object.entries(roleCounts).forEach(([role, count]) => {
+            if (count > 0) {
+              console.log(`   - Connected ${role}s: ${count}`);
+            }
+          });
+        } catch (error) {
+          console.error('Error fetching socket information:', error);
+        }
+      });
     };
-    const onError = (e: any) => {
-      if (started) return;
-      if (e?.code === 'EADDRINUSE' && attempt < maxAttempts) {
-        const next = p + 1;
-        start(next, attempt + 1);
-      } else {
-        throw e;
-      }
-    };
-    server.once('listening', onListening);
-    server.once('error', onError);
-    try {
-      server.listen(p);
-    } catch (e: any) {
-      onError(e);
-    }
-  };
-  start(PORT, 1);
-}).catch((err) => {
-  // eslint-disable-next-line no-console
-  console.error('MongoDB connection error', err);
+
+    // Start the server
+    server.listen(port, () => {
+      console.log(`🚀 Server is running on port ${port}`);
+      console.log(`🌐 Allowed origins: ${ALLOWED_ORIGINS.join(', ')}`);
+      console.log(`🏷️  Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`💾 Database: ${MONGODB_URI.split('@').pop() || 'unknown'}`);
+      console.log(`📧 Email service: ${getEmailConfig().host ? '✅ Enabled' : '❌ Disabled'}`);
+      
+      // Log WebSocket status
+      console.log(`🔌 WebSocket server is running`);
+      
+      // Log initial socket info (non-blocking)
+      logSocketInfo();
+      
+      resolve();
+      });
+      
+      // Handle server errors
+      server.on('error', (error: NodeJS.ErrnoException) => {
+        if (error.syscall !== 'listen') {
+          reject(error);
+          return;
+        }
+
+        // Handle specific listen errors with friendly messages
+        switch (error.code) {
+          case 'EACCES':
+            console.error(`Port ${port} requires elevated privileges`);
+            process.exit(1);
+            break;
+          case 'EADDRINUSE':
+            console.error(`Port ${port} is already in use`);
+            process.exit(1);
+            break;
+          default:
+            reject(error);
+        }
+      });
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the server
+start(PORT, 1).catch((error: Error) => {
+  console.error('Failed to start server:', error);
   process.exit(1);
 });
-
-

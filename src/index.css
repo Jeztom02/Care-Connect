@@ -2,301 +2,274 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Cross-browser compatibility fixes */
-@supports (-webkit-touch-callout: none) {
-  /* Safari specific styles */
-  body {
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
-  }
-}
-
-/* Standard property with vendor prefix for Safari */
-* {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-}
-
-/* For text elements that should be selectable */
-p, h1, h2, h3, h4, h5, h6, a, li, span, div, input, textarea, button, select, label {
-  -webkit-user-select: text;
-  -moz-user-select: text;
-  -ms-user-select: text;
-  user-select: text;
-}
-
-/* Performance optimization for animations */
-@keyframes gentle-float {
-  0%, 100% {
-    transform: translateY(0);
-  }
-  50% {
-    transform: translateY(-10px);
-  }
-}
-
-/* Use transform and opacity for better performance */
-.animate-gentle-float {
-  animation: gentle-float 6s ease-in-out infinite;
-  will-change: transform;
-  backface-visibility: hidden;
-  transform: translateZ(0);
-  -webkit-transform: translateZ(0);
-}
-
-/* Care Connect Design System - Healthcare Themed */
-
 @layer base {
   :root {
     /* Healthcare Color Palette */
-    --background: 0 0% 100%;
-    --foreground: 215 25% 27%;
+    --background: 0 0% 100%; /* White background */
+    --foreground: 222.2 84% 4.9%; /* Dark blue text */
     
-    /* Medical Blues - Primary Brand */
-    --primary: 207 90% 61%;
-    --primary-light: 207 90% 75%;
-    --primary-dark: 207 90% 45%;
-    --primary-foreground: 0 0% 100%;
+    --card: 0 0% 100%; /* White cards */
+    --card-foreground: 222.2 84% 4.9%; /* Dark blue text on cards */
     
-    /* Healing Greens - Secondary */
-    --secondary: 152 57% 67%;
-    --secondary-light: 152 57% 80%;
-    --secondary-foreground: 215 25% 27%;
+    --popover: 0 0% 100%; /* White popovers */
+    --popover-foreground: 222.2 84% 4.9%; /* Dark blue text on popovers */
     
-    /* Calming Lavender - Accent */
-    --accent: 260 30% 80%;
-    --accent-light: 260 30% 90%;
-    --accent-foreground: 215 25% 27%;
+    /* Primary color - Healthcare Blue */
+    --primary: 199 89% 48%; /* Primary blue */
+    --primary-foreground: 210 40% 98%; /* White text on primary */
     
-    /* Medical Trust Colors */
-    --trust-blue: 217 91% 60%;
-    --healing-green: 158 64% 52%;
-    --gentle-purple: 267 57% 78%;
+    /* Secondary color - Light blue */
+    --secondary: 199 89% 96%; /* Very light blue */
+    --secondary-foreground: 199 89% 38%; /* Darker blue for text on secondary */
     
-    /* Gradients */
-    --gradient-primary: linear-gradient(135deg, hsl(207 90% 61%), hsl(152 57% 67%));
-    --gradient-hero: linear-gradient(135deg, hsl(207 90% 95%), hsl(152 57% 95%));
-    --gradient-card: linear-gradient(145deg, hsl(0 0% 100%), hsl(207 90% 98%));
+    /* Muted colors */
+    --muted: 210 40% 96.1%; /* Light gray */
+    --muted-foreground: 215.4 16.3% 46.9%; /* Gray text */
     
-    /* Soft Medical Shadows */
-    --shadow-gentle: 0 2px 15px hsl(207 90% 61% / 0.08);
-    --shadow-card: 0 4px 25px hsl(207 90% 61% / 0.12);
-    --shadow-float: 0 8px 35px hsl(207 90% 61% / 0.15);
-    --shadow-glow: 0 0 25px hsl(207 90% 61% / 0.25);
+    /* Accent colors */
+    --accent: 199 89% 96%; /* Very light blue */
+    --accent-foreground: 199 89% 48%; /* Primary blue for text on accent */
     
-    /* Animation Timings */
-    --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-bounce: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-
-    /* UI Components */
-    --card: 0 0% 100%;
-    --card-foreground: 215 25% 27%;
-
-    --popover: 0 0% 100%;
-    --popover-foreground: 215 25% 27%;
-
-    --muted: 207 90% 97%;
-    --muted-foreground: 215 15% 57%;
-
-    --destructive: 0 75% 60%;
-    --destructive-foreground: 0 0% 100%;
-
-    --border: 207 40% 91%;
-    --input: 207 40% 95%;
-    --ring: 207 90% 61%;
-
-    --radius: 0.75rem;
-
-    --sidebar-background: 0 0% 98%;
-
-    --sidebar-foreground: 240 5.3% 26.1%;
-
-    --sidebar-primary: 240 5.9% 10%;
-
-    --sidebar-primary-foreground: 0 0% 98%;
-
-    --sidebar-accent: 240 4.8% 95.9%;
-
-    --sidebar-accent-foreground: 240 5.9% 10%;
-
-    --sidebar-border: 220 13% 91%;
-
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    /* Destructive colors */
+    --destructive: 0 84.2% 60.2%; /* Red */
+    --destructive-foreground: 210 40% 98%; /* White text on red */
+    
+    /* Border colors */
+    --border: 214.3 31.8% 91.4%; /* Light gray border */
+    --input: 214.3 31.8% 91.4%; /* Light gray input */
+    --ring: 199 89% 48%; /* Primary blue ring/focus */
+    
+    /* Border radius */
+    --radius: 0.5rem; /* 8px border radius */
+    
+    /* Status colors */
+    --success: 142.1 76.2% 36.3%; /* Green */
+    --success-foreground: 0 0% 100%; /* White text on success */
+    
+    --warning: 38 92% 50%; /* Amber */
+    --warning-foreground: 0 0% 100%; /* White text on warning */
+    
+    --info: 199 89% 48%; /* Primary blue */
+    --info-foreground: 0 0% 100%; /* White text on info */
   }
 
   .dark {
-    --background: 215 30% 7%;
-    --foreground: 207 90% 95%;
+    --background: 222.2 84% 4.9%; /* Dark blue background */
+    --foreground: 210 40% 98%; /* White text */
     
-    --primary: 207 90% 65%;
-    --primary-foreground: 215 30% 7%;
+    --card: 222.2 84% 4.9%; /* Dark blue cards */
+    --card-foreground: 210 40% 98%; /* White text on cards */
     
-    --secondary: 152 57% 60%;
-    --secondary-foreground: 215 30% 7%;
+    --popover: 222.2 84% 4.9%; /* Dark blue popovers */
+    --popover-foreground: 210 40% 98%; /* White text on popovers */
     
-    --accent: 260 30% 70%;
-    --accent-foreground: 215 30% 7%;
+    --primary: 199 89% 48%; /* Primary blue */
+    --primary-foreground: 210 40% 98%; /* White text on primary */
     
-    --card: 215 30% 10%;
-    --card-foreground: 207 90% 95%;
+    --secondary: 199 89% 20%; /* Dark blue */
+    --secondary-foreground: 199 89% 90%; /* Light blue text on secondary */
     
-    --muted: 215 30% 15%;
-    --muted-foreground: 215 15% 70%;
+    --muted: 217.2 32.6% 17.5%; /* Dark gray */
+    --muted-foreground: 215 20.2% 65.1%; /* Light gray text */
     
-    --border: 215 30% 20%;
-    --input: 215 30% 20%;
-    --ring: 207 90% 65%;
+    --accent: 199 89% 20%; /* Dark blue */
+    --accent-foreground: 199 89% 90%; /* Light blue text on accent */
+    
+    --destructive: 0 62.8% 30.6%; /* Dark red */
+    --destructive-foreground: 210 40% 98%; /* White text on destructive */
+    
+    --border: 217.2 32.6% 17.5%; /* Dark gray border */
+    --input: 217.2 32.6% 17.5%; /* Dark gray input */
+    --ring: 199 89% 48%; /* Primary blue ring/focus */
   }
 }
 
+/* Base styles */
 @layer base {
   * {
-    @apply border-border;
-  }
-
-  body {
-    @apply bg-background text-foreground font-sans antialiased;
-    margin: 0;
-    padding: 0;
+    border-color: hsl(var(--border)); /* Apply border color to all borders */
   }
   
-  /* Smooth scrolling */
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  
+  /* Smooth scrolling for the whole document */
   html {
     scroll-behavior: smooth;
-    margin: 0;
-    padding: 0;
+  }
+  
+  /* Selection styling */
+  ::selection {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+  }
+  
+  /* Scrollbar styling */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background-color: hsl(var(--muted));
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background-color: hsla(var(--muted-foreground) / 0.3);
+    border-radius: 9999px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsla(var(--muted-foreground) / 0.5);
   }
 }
 
-@layer components {
-  /* Hero Section Styles */
-  .hero-gradient {
-    background: var(--gradient-hero);
+/* Custom utility classes */
+@layer utilities {
+  /* Container with max width and centered */
+  .container {
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    max-width: 80rem; /* 1280px */
   }
   
-  .hero-fullscreen {
-    width: 100vw;
-    height: 100vh;
-    min-height: 100vh;
-    /* Ensure full coverage on all devices */
-    background-attachment: fixed;
-    /* Prevent scrollbars */
+  @media (min-width: 640px) {
+    .container {
+      padding-left: 1.5rem;
+      padding-right: 1.5rem;
+    }
+  }
+  
+  @media (min-width: 1024px) {
+    .container {
+      padding-left: 2rem;
+      padding-right: 2rem;
+    }
+  }
+  
+  /* Text gradient */
+  .text-gradient {
+    background-clip: text;
+    -webkit-background-clip: text;
+    color: transparent;
+    background-image: linear-gradient(to right, hsl(var(--primary)), hsla(var(--primary) / 0.8));
+  }
+  
+  /* Card with subtle shadow */
+  .card {
+    background-color: hsl(var(--card));
+    color: hsl(var(--card-foreground));
+    border-radius: 0.5rem;
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     overflow: hidden;
   }
   
-  /* Mobile-specific adjustments */
-  @media (max-width: 768px) {
-    .hero-fullscreen {
-      background-attachment: scroll; /* Better performance on mobile */
-    }
+  /* Button with hover and focus states */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition-property: color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
   }
   
-  /* Print-specific styles */
-  @media print {
-    .no-print {
-      display: none !important;
-    }
-    
-    .print-content {
-      background: white !important;
-      color: black !important;
-    }
-    
-    .print-content .bg-primary,
-    .print-content .bg-secondary,
-    .print-content .bg-accent {
-      background: #f0f0f0 !important;
-      color: black !important;
-    }
-    
-    .print-content .text-primary,
-    .print-content .text-secondary,
-    .print-content .text-accent {
-      color: black !important;
-    }
-    
-    .print-content .border {
-      border: 1px solid #ccc !important;
-    }
-    
-    .print-content .shadow-lg,
-    .print-content .shadow-xl {
-      box-shadow: none !important;
-    }
+  .btn:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px hsl(var(--ring)), 0 0 0 4px hsl(var(--ring) / 0.1);
   }
   
-  .primary-gradient {
-    background: var(--gradient-primary);
+  .btn:disabled {
+    opacity: 0.5;
+    pointer-events: none;
   }
   
-  .card-gradient {
-    background: var(--gradient-card);
+  .btn:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px hsl(var(--ring)), 0 0 0 4px hsl(var(--ring) / 0.1);
   }
   
-  /* Medical Themed Animations */
-  .animate-gentle-float {
-    animation: gentle-float 6s ease-in-out infinite;
+  .btn-primary {
+    background-color: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
   }
   
-  .animate-pulse-soft {
-    animation: pulse-soft 3s ease-in-out infinite;
+  .btn-primary:hover {
+    background-color: hsla(var(--primary) / 0.9);
   }
   
-  .animate-slide-up {
-    animation: slide-up 0.6s ease-out;
+  .btn-secondary {
+    background-color: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
   }
   
-  .animate-fade-in {
-    animation: fade-in 0.8s ease-out;
+  .btn-secondary:hover {
+    background-color: hsla(var(--secondary) / 0.8);
   }
   
-  /* Button Variants */
-  .btn-medical {
-    @apply bg-primary text-primary-foreground px-6 py-3 rounded-xl font-medium;
-    @apply hover:shadow-lg transition-all duration-300;
-    @apply hover:scale-105 active:scale-95;
+  .btn-outline {
+    border: 1px solid hsl(var(--input));
   }
   
-  .btn-outline-medical {
-    @apply border-2 border-primary text-primary bg-transparent px-6 py-3 rounded-xl font-medium;
-    @apply hover:bg-primary hover:text-primary-foreground transition-all duration-300;
-    @apply hover:shadow-lg hover:scale-105 active:scale-95;
+  .btn-outline:hover {
+    background-color: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
   }
   
-  /* Card Styles */
-  .medical-card {
-    @apply bg-card border border-border rounded-2xl p-6;
-    box-shadow: var(--shadow-card);
-    @apply hover:shadow-lg transition-all duration-300;
+  /* Form elements */
+  .input {
+    display: flex;
+    height: 2.5rem;
+    width: 100%;
+    border-radius: 0.375rem;
+    border: 1px solid hsl(var(--input));
+    background-color: hsl(var(--background));
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
   }
   
-  /* Input Styles */
-  .medical-input {
-    @apply w-full px-4 py-3 rounded-xl border border-input bg-background;
-    @apply focus:ring-2 focus:ring-primary focus:border-transparent;
-    @apply transition-all duration-300;
+  .input:focus-visible {
+    outline: 2px solid transparent;
+    outline-offset: 2px;
+    box-shadow: 0 0 0 2px hsl(var(--ring)), 0 0 0 4px hsl(var(--ring) / 0.1);
   }
-}
-
-@keyframes gentle-float {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  33% { transform: translateY(-10px) rotate(1deg); }
-  66% { transform: translateY(-5px) rotate(-1deg); }
-}
-
-@keyframes pulse-soft {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.02); }
-}
-
-@keyframes slide-up {
-  from { opacity: 0; transform: translateY(30px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  
+  .input:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+  
+  .input::placeholder {
+    color: hsl(var(--muted-foreground));
+  }
+  
+  .input::-webkit-file-upload-button {
+    border: 0;
+    background: transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+  }
+  
+  .label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1;
+  }
+  
+  .peer:disabled + .label {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
 }

@@ -154,12 +154,31 @@ Collections/models: `User`, `Patient`, `Appointment`, `Message`, `Alert`. The se
 
 ## How can I deploy this project?
 
+### Option 1: Deploy to Render (Recommended)
+
+This project is configured for easy deployment to Render with both frontend and backend.
+
+**Quick Start (5 minutes):**
+See [QUICK_DEPLOY.md](./QUICK_DEPLOY.md) for a fast deployment guide.
+
+**Complete Guide:**
+See [RENDER_DEPLOYMENT_GUIDE.md](./RENDER_DEPLOYMENT_GUIDE.md) for detailed step-by-step instructions.
+
+**Deployment Checklist:**
+Use [DEPLOYMENT_CHECKLIST.md](./DEPLOYMENT_CHECKLIST.md) to ensure nothing is missed.
+
+### Option 2: Deploy via Lovable
+
 Simply open [Lovable](https://lovable.dev/projects/45e8fcf3-9dad-4b25-b4c3-17a70c3153cf) and click on Share -> Publish.
 
-## Can I connect a custom domain to my Lovable project?
+## Can I connect a custom domain?
 
-Yes, you can!
+Yes! Both Render and Lovable support custom domains.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+**For Render:**
+- Navigate to your service → Settings → Custom Domain
+- Follow the DNS configuration instructions
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+**For Lovable:**
+- Navigate to Project > Settings > Domains and click Connect Domain
+- Read more: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)

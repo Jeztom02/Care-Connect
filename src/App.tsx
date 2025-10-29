@@ -19,27 +19,63 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 const router = createBrowserRouter(
   createRoutesFromElements(
     <Route element={<Layout />}>
+      {/* Public Routes */}
       <Route index element={<Landing />} />
       <Route path="login" element={<Login />} />
       <Route path="register" element={<Register />} />
       <Route path="forgot-password" element={<ForgotPassword />} />
       <Route path="reset-password/:token" element={<ResetPassword />} />
       <Route path="auth/google/callback" element={<GoogleCallback />} />
-      <Route 
-        path="dashboard/:role/*" 
-        element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } 
-      />
+      
+      {/* Protected Routes */}
+      <Route path="dashboard">
+        {/* Admin Dashboard */}
+        <Route 
+          path="admin" 
+          element={
+            <ProtectedRoute allowRoles={['admin']}>
+              <Dashboard role="admin" />
+            </ProtectedRoute>
+          } 
+        >
+          <Route index element={null} />
+          <Route path="users" element={<div>User Management</div>} />
+          <Route path="analytics" element={<div>Analytics</div>} />
+          <Route path="settings" element={<div>Settings</div>} />
+        </Route>
+
+        {/* Doctor Dashboard */}
+        <Route 
+          path="doctor" 
+          element={
+            <ProtectedRoute allowRoles={['doctor']}>
+              <Dashboard role="doctor" />
+            </ProtectedRoute>
+          } 
+        >
+          <Route index element={null} />
+          <Route path="patients" element={<div>My Patients</div>} />
+          <Route path="appointments" element={<div>My Appointments</div>} />
+        </Route>
+
+        {/* Fallback for other roles */}
+        <Route 
+          path=":role/*" 
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+      </Route>
+      
       <Route path="*" element={<NotFound />} />
     </Route>
   ),
   {
     future: {
       // Enable any v6.x future flags here
-      // v7 flags are not yet available in v6.30.1
+      v7_relativeSplatPath: true
     }
   }
 );

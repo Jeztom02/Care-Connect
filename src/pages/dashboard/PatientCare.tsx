@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
+import { authService } from "@/services/authService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,121 +21,418 @@ export const PatientCare = () => {
   const [isUpdateVitalsOpen, setIsUpdateVitalsOpen] = useState(false);
   const [isEmergencyAlertOpen, setIsEmergencyAlertOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [patientNotes, setPatientNotes] = useState<Record<string, any[]>>({});
+  const [patientVitals, setPatientVitals] = useState<Record<string, any[]>>({});
   const { toast } = useToast();
   
-  const { data, loading, error, refetch } = usePatients();
+  // Use the usePatients hook to manage patients data
+  const { data: patientsData = [], loading, error, refetch: refetchPatients } = usePatients();
+  
+  // Add a manual refresh function
+  const refreshPatientData = async () => {
+    try {
+      console.log('Refreshing patient data...');
+      const updatedData = await refetchPatients();
+      console.log('Refreshed patient data:', updatedData);
+      setRefreshTrigger(prev => prev + 1); // Increment to trigger re-render
+    } catch (error) {
+      console.error('Error refreshing patient data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to refresh patient data',
+        variant: 'destructive',
+      });
+    }
+  };
 
-  // Normalize data from API. Current backend Patient model exposes: _id, name, status
-  // Get all patients and filter based on search query
+  // Fetch notes for a patient
+  const fetchPatientNotes = async (patientId: string) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await fetch(`/api/patient-care/${patientId}/notes`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Handle token expiration or invalid token
+          const refreshed = await authService.refreshToken();
+          if (refreshed) {
+            return fetchPatientNotes(patientId); // Retry with new token
+          }
+          throw new Error('Session expired. Please log in again.');
+        }
+        throw new Error('Failed to fetch notes');
+      }
+      
+      const data = await response.json();
+      setPatientNotes(prev => ({
+        ...prev,
+        [patientId]: data.data || []
+      }));
+    } catch (error) {
+      console.error('Error fetching notes:', error);
+      // Optionally show error to user
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to fetch patient notes',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Fetch vitals for a patient
+  const fetchPatientVitals = async (patientId: string) => {
+    try {
+      const token = localStorage.getItem('authToken');
+      if (!token) {
+        throw new Error('No authentication token found');
+      }
+      
+      const response = await fetch(`/api/patient-care/${patientId}/vitals`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (!response.ok) {
+        if (response.status === 401) {
+          // Handle token expiration or invalid token
+          const refreshed = await authService.refreshToken();
+          if (refreshed) {
+            return fetchPatientVitals(patientId); // Retry with new token
+          }
+          throw new Error('Session expired. Please log in again.');
+        }
+        throw new Error('Failed to fetch vitals');
+      }
+      
+      const data = await response.json();
+      setPatientVitals(prev => ({
+        ...prev,
+        [patientId]: data || []
+      }));
+    } catch (error) {
+      console.error('Error fetching vitals:', error);
+      // Optionally show error to user
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to fetch patient vitals',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Convert the data to the expected format if needed
+  const formattedPatients = useMemo(() => {
+    if (!patientsData) {
+      console.log('No patients data available');
+      return [];
+    }
+    
+    console.log('Raw patients data:', patientsData);
+    
+    const formatted = patientsData.map(patient => {
+      const patientId = patient._id || patient.id;
+      
+      return {
+        ...patient,
+        id: patientId,
+        vitals: patientVitals[patientId]?.[0] || { heartRate: 0, bloodPressure: '-', temperature: 0, oxygenSaturation: 0 },
+        carePlan: Array.isArray(patient.carePlan) ? patient.carePlan : [],
+        notes: patientNotes[patientId] || []
+      };
+    });
+    
+    console.log('Formatted patients with notes and vitals:', formatted);
+    return formatted;
+  }, [patientsData, patientNotes, patientVitals, refreshTrigger]);
+
+  // Filter patients based on search query and get current patient
   const { filteredPatients, currentPatient } = useMemo(() => {
-    const list = Array.isArray(data) ? data : [];
+    const list = formattedPatients || [];
     
     // Filter patients based on search query
-    const filtered = list
-      .filter(patient => 
-        searchQuery === "" || 
-        patient.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (patient.room && patient.room.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (patient.condition && patient.condition.toLowerCase().includes(searchQuery.toLowerCase()))
-      )
-      .map((p: any) => ({
-        id: p._id,
-        name: p.name,
-        room: p.room || "N/A",
-        condition: p.condition || p.status || "Unknown",
-        priority: p.priority || "Medium",
-        avatar: p.avatar || "/placeholder-avatar.jpg",
-        vitals: p.vitals || { heartRate: 0, bloodPressure: "-", temperature: 0, oxygenSaturation: 0 },
-        carePlan: Array.isArray(p.carePlan) ? p.carePlan : [],
-        notes: p.notes || "",
-      }));
-
+    const filtered = searchQuery === "" 
+      ? list 
+      : list.filter(patient => 
+          patient.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (patient.room && patient.room.toLowerCase().includes(searchQuery.toLowerCase())) ||
+          (patient.condition && patient.condition.toLowerCase().includes(searchQuery.toLowerCase()))
+        );
+    
     // Ensure selected index is within bounds
     const safeIndex = Math.min(selectedPatientIndex, Math.max(0, filtered.length - 1));
     const current = filtered[safeIndex] || null;
     
     return { filteredPatients: filtered, currentPatient: current };
-  }, [data, searchQuery, selectedPatientIndex]);
+  }, [formattedPatients, searchQuery, selectedPatientIndex]);
+
+  // Fetch notes and vitals when currentPatient changes
+  useEffect(() => {
+    if (currentPatient?.id) {
+      fetchPatientNotes(currentPatient.id);
+      fetchPatientVitals(currentPatient.id);
+    }
+  }, [currentPatient?.id]);
 
   // Handle patient selection by ID
   const handlePatientSelect = (patientId: string) => {
-    if (!data || !Array.isArray(data)) return;
-    const index = data.findIndex(p => p._id === patientId);
+    if (!formattedPatients || !Array.isArray(formattedPatients)) return;
+    const index = formattedPatients.findIndex(p => p.id === patientId);
     if (index !== -1) {
       setSelectedPatientIndex(index);
     }
   };
 
-  const handleAddNote = async (note: string) => {
-    if (!currentPatient) return;
-    
-    try {
-      setIsLoading(true);
-      await patientCareApi.addNote(currentPatient.id, note);
-      await refetch();
+  const handleAddNote = async (note: string): Promise<void> => {
+    if (!currentPatient) {
       toast({
-        title: "Success",
-        description: "Note added successfully",
-      });
-      setIsAddNoteOpen(false);
-    } catch (error) {
-      console.error("Error adding note:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add note. Please try again.",
+        title: "❌ Error",
+        description: "No patient selected.",
         variant: "destructive",
+        duration: 5000,
       });
-    } finally {
-      setIsLoading(false);
+      return;
     }
-  };
-
-  const handleUpdateVitals = async (vitals: any) => {
-    if (!currentPatient) return;
     
     try {
       setIsLoading(true);
-      await patientCareApi.recordVitals(currentPatient.id, vitals);
-      await refetch();
+      
+      // Add the note using the API
+      const response = await patientCareApi.addNote(currentPatient.id, note.trim());
+      console.log('Note API response:', response);
+      
+      // Show success message
       toast({
-        title: "Success",
-        description: "Vitals updated successfully",
-      });
-      setIsUpdateVitalsOpen(false);
-    } catch (error) {
-      console.error("Error updating vitals:", error);
-      toast({
-        title: "Error",
-        description: "Failed to update vitals. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleEmergencyAlert = async (alertData: { priority: string; details: string }) => {
-    if (!currentPatient) return;
-    
-    try {
-      setIsLoading(true);
-      await patientCareApi.createEmergencyAlert(currentPatient.id, {
-        priority: alertData.priority,
-        details: alertData.details
-      });
-      toast({
-        title: "Emergency Alert Sent",
-        description: "The emergency team has been notified.",
+        title: "✅ Note Added",
+        description: "Your note has been saved successfully.",
         variant: "default",
+        duration: 3000,
       });
-      setIsEmergencyAlertOpen(false);
-    } catch (error) {
-      console.error("Error sending emergency alert:", error);
+      
+      // Close the dialog
+      setIsAddNoteOpen(false);
+      
+      // Refresh the notes for the current patient
+      await fetchPatientNotes(currentPatient.id);
+    } catch (error: any) {
+      console.error("Error adding note:", error);
+      
+      // Handle authentication errors specifically
+      if (error.response?.status === 401 || error.isAuthError) {
+        toast({
+          title: "🔒 Session Expired",
+          description: error.message || "Your session has expired. Please log in again.",
+          variant: "destructive",
+          duration: 10000,
+          action: (
+            <Button 
+              variant="outline" 
+              className="text-white border-white/20 hover:bg-white/10"
+              onClick={() => window.location.href = '/login'}
+            >
+              Log In
+            </Button>
+          ),
+        });
+      } else {
+        const errorMessage = error.response?.data?.message || error.message || "Failed to add note. Please try again.";
+        toast({
+          title: "❌ Error",
+          description: errorMessage,
+          variant: "destructive",
+          duration: 5000,
+        });
+      }
+      
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleUpdateVitals = async (vitals: any): Promise<void> => {
+    if (!currentPatient) {
       toast({
-        title: "Error",
-        description: "Failed to send emergency alert. Please try again.",
+        title: "❌ Error",
+        description: "No patient selected.",
         variant: "destructive",
+        duration: 5000,
       });
+      return;
+    }
+    
+    try {
+      setIsLoading(true);
+      
+      // Validate blood pressure format (e.g., 120/80)
+      const bloodPressureRegex = /^\d{2,3}\/\d{2,3}$/;
+      if (!bloodPressureRegex.test(vitals.bloodPressure)) {
+        throw new Error('Please enter blood pressure in the format "120/80"');
+      }
+      
+      // Parse and validate numeric values
+      const parsedVitals = {
+        heartRate: parseInt(vitals.heartRate, 10),
+        temperature: parseFloat(vitals.temperature),
+        oxygenSaturation: parseFloat(vitals.oxygenSaturation),
+        respiratoryRate: parseInt(vitals.respiratoryRate, 10),
+        bloodPressure: vitals.bloodPressure,
+        notes: vitals.notes ? vitals.notes.trim() : ''
+      };
+      
+      // Additional validation
+      if (isNaN(parsedVitals.heartRate) || parsedVitals.heartRate < 30 || parsedVitals.heartRate > 250) {
+        throw new Error('Heart rate must be between 30 and 250 bpm');
+      }
+      
+      if (isNaN(parsedVitals.temperature) || parsedVitals.temperature < 30 || parsedVitals.temperature > 45) {
+        throw new Error('Temperature must be between 30°C and 45°C');
+      }
+      
+      if (isNaN(parsedVitals.oxygenSaturation) || parsedVitals.oxygenSaturation < 0 || parsedVitals.oxygenSaturation > 100) {
+        throw new Error('Oxygen saturation must be between 0% and 100%');
+      }
+      
+      if (isNaN(parsedVitals.respiratoryRate) || parsedVitals.respiratoryRate < 0 || parsedVitals.respiratoryRate > 60) {
+        throw new Error('Respiratory rate must be between 0 and 60 breaths per minute');
+      }
+      
+      // Record the vitals
+      const response = await patientCareApi.recordVitals(currentPatient.id, parsedVitals);
+      console.log('Vitals API response:', response);
+      
+      // Show success message
+      toast({
+        title: "✅ Vitals Updated",
+        description: "Patient vitals have been successfully recorded.",
+        variant: "default",
+        duration: 4000,
+      });
+      
+      // Close the dialog
+      setIsUpdateVitalsOpen(false);
+      
+      // Refresh the vitals for the current patient
+      await fetchPatientVitals(currentPatient.id);
+    } catch (error: any) {
+      console.error("Error updating vitals:", error);
+      
+      // Handle validation and other errors
+      const errorMessage = error.response?.data?.message || error.message || "Failed to update vitals. Please check the values and try again.";
+      
+      toast({
+        title: "❌ Error",
+        description: errorMessage,
+        variant: "destructive",
+        duration: 6000,
+      });
+      
+      throw error;
+      
+      if (error.isAuthError) {
+        toast({
+          title: "🔒 Session Expired",
+          description: error.message || "Your session has expired. Please log in again.",
+          variant: "destructive",
+          duration: 10000,
+          action: (
+            <Button 
+              variant="outline" 
+              className="text-white border-white/20 hover:bg-white/10"
+              onClick={() => window.location.href = '/login'}
+            >
+              Log In
+            </Button>
+          ),
+        });
+      } else {
+        toast({
+          title: "❌ Error",
+          description: error.message || "Failed to update vitals. Please check the values and try again.",
+          variant: "destructive",
+          duration: 6000,
+        });
+      }
+      
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleEmergencyAlert = async (details: { priority: 'high' | 'medium' | 'low'; details: string }): Promise<void> => {
+    if (!currentPatient) return;
+    
+    try {
+      setIsLoading(true);
+      
+      // Send the emergency alert
+      await patientCareApi.createEmergencyAlert(currentPatient.id, { 
+        priority: details.priority.toLowerCase(), 
+        details: details.details.trim() 
+      });
+      
+      // Force a complete refresh of the patient data
+      const response = await refetchPatients();
+      
+      if (response && Array.isArray(response)) {
+        // Update the local state with the new data
+        setPatientsData([...response]);
+        
+        toast({
+          title: "🚨 Emergency Alert Sent",
+          description: `A ${details.priority} priority alert has been sent to the medical team.`,
+          variant: "default",
+          duration: 5000,
+          className: "bg-blue-600 text-white"
+        });
+        
+        setIsEmergencyAlertOpen(false);
+      }
+      return; // Explicitly return void
+    } catch (error: any) {
+      console.error("Error sending emergency alert:", error);
+      
+      // Show appropriate error message based on error type
+      const errorMessage = error.message || "Failed to send emergency alert. Please try again.";
+      
+      if (error.isAuthError) {
+        toast({
+          title: "🔒 Session Expired",
+          description: errorMessage,
+          variant: "destructive",
+          duration: 10000,
+          action: (
+            <Button 
+              variant="outline" 
+              className="text-white border-white/20 hover:bg-white/10"
+              onClick={() => window.location.href = '/login'}
+            >
+              Log In
+            </Button>
+          ),
+        });
+      } else {
+        toast({
+          title: "❌ Error",
+          description: errorMessage,
+          variant: "destructive",
+          duration: 8000,
+        });
+      }
+      
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -182,7 +480,7 @@ export const PatientCare = () => {
         <div className="text-center">
           <h2 className="text-xl font-semibold text-destructive mb-2">Failed to load patients</h2>
           <p className="text-muted-foreground mb-4">{error}</p>
-          <Button onClick={refetch}>Try Again</Button>
+          <Button onClick={() => refetchPatients()}>Try Again</Button>
         </div>
       </div>
     );
@@ -343,7 +641,18 @@ export const PatientCare = () => {
                   {completedTasks}/{currentPatient.carePlan.length} completed
                 </span>
               </div>
-              <Progress value={completionPercentage} className="mb-4" />
+              <div className="mb-4">
+                <Progress 
+                  value={completionPercentage} 
+                  aria-label={`Care plan progress: ${completionPercentage}% complete`}
+                  aria-valuenow={completionPercentage}
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                />
+                <div className="sr-only">
+                  {completionPercentage}% of care plan completed
+                </div>
+              </div>
               <div className="space-y-2">
                 {Array.isArray(currentPatient.carePlan) && currentPatient.carePlan.length > 0 ? (
                   currentPatient.carePlan.map((task: any, index: number) => (
@@ -370,9 +679,32 @@ export const PatientCare = () => {
 
             {/* Care Notes */}
             <div>
-              <h4 className="font-semibold mb-3">Care Notes</h4>
-              <div className="p-3 bg-muted rounded-lg min-h-[100px]">
-                <p className="text-sm whitespace-pre-wrap">{currentPatient.notes || 'No notes available.'}</p>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold">Care Notes</h4>
+                <span className="text-sm text-muted-foreground">
+                  {Array.isArray(currentPatient.notes) ? currentPatient.notes.length : 0} notes
+                </span>
+              </div>
+              <div className="space-y-3 mb-4 max-h-60 overflow-y-auto pr-2">
+                {Array.isArray(currentPatient.notes) && currentPatient.notes.length > 0 ? (
+                  currentPatient.notes.map((note: any, index: number) => (
+                    <div key={note._id || index} className="p-3 bg-muted rounded-lg">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-sm font-medium">
+                          {note.createdBy?.name || 'Unknown'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(note.createdAt).toLocaleString()}
+                        </span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{note.content}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground">
+                    No notes available.
+                  </div>
+                )}
               </div>
               <div className="flex flex-wrap gap-2 mt-3">
                 <Button 

@@ -9,7 +9,21 @@ export interface IPatientVital extends Document {
   respiratoryRate: number;
   notes?: string;
   recordedBy: mongoose.Types.ObjectId;
+  recordedByRole: string;
   recordedAt: Date;
+  severity: 'normal' | 'warning' | 'critical';
+  readBy: Array<{
+    userId: mongoose.Types.ObjectId;
+    role: string;
+    timestamp: Date;
+  }>;
+  acknowledgedBy?: {
+    userId: mongoose.Types.ObjectId;
+    role: string;
+    timestamp: Date;
+    notes?: string;
+  };
+  status: 'new' | 'acknowledged' | 'resolved';
 }
 
 const PatientVitalSchema = new Schema<IPatientVital>(
@@ -58,9 +72,35 @@ const PatientVitalSchema = new Schema<IPatientVital>(
       ref: 'User', 
       required: true 
     },
+    recordedByRole: {
+      type: String,
+      required: true,
+      enum: ['doctor', 'nurse', 'admin']
+    },
     recordedAt: { 
       type: Date, 
       default: Date.now 
+    },
+    severity: {
+      type: String,
+      enum: ['normal', 'warning', 'critical'],
+      default: 'normal'
+    },
+    readBy: [{
+      userId: { type: Schema.Types.ObjectId, ref: 'User' },
+      role: String,
+      timestamp: { type: Date, default: Date.now }
+    }],
+    acknowledgedBy: {
+      userId: { type: Schema.Types.ObjectId, ref: 'User' },
+      role: String,
+      timestamp: { type: Date },
+      notes: String
+    },
+    status: {
+      type: String,
+      enum: ['new', 'acknowledged', 'resolved'],
+      default: 'new'
     },
   },
   { 

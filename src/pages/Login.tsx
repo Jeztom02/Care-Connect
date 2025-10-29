@@ -47,31 +47,82 @@ export const Login = () => {
     setIsLoading(true);
     try {
       const backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+      console.log('Attempting to log in to:', `${backendUrl}/api/auth/login`);
       const res = await fetch(`${backendUrl}/api/auth/login`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: formData.email.trim().toLowerCase(), password: formData.password })
+        headers: { 
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          email: formData.email.trim().toLowerCase(), 
+          password: formData.password,
+          role: formData.role
+        }),
+        credentials: 'include' // Important for httpOnly cookies
       });
 
       if (!res.ok) {
-        throw new Error('Invalid username or password');
+        console.log('Response status:', res.status);
+        const errorText = await res.text();
+        console.log('Error response:', errorText);
+        let errorData;
+        try {
+          errorData = JSON.parse(errorText);
+        } catch (e) {
+          throw new Error(`Server responded with status ${res.status}: ${errorText}`);
+        }
+        throw new Error(errorData.message || `Server responded with status ${res.status}`);
       }
 
-      const data = await res.json();
-      const { token, user } = data;
-
+      const responseData = await res.json();
+      console.log('Login response:', responseData);
+      
+      // Map server response to expected format
+      const { token, user } = responseData;
+      
       if (!token || !user) {
         throw new Error('Invalid response from server');
       }
 
+      // Store tokens in localStorage
       localStorage.setItem('authToken', token);
+      
+      // Store user info
       localStorage.setItem('userRole', user.role);
-      localStorage.setItem('userName', user.name || user.email.split('@')[0] || 'User');
+      localStorage.setItem('userName', user.name || user.email?.split('@')[0] || 'User');
+      localStorage.setItem('userId', user.id || user._id || '');
 
-      toast({ title: "Welcome back!", description: `Successfully logged in as ${user.role}.` });
-      navigate(`/dashboard/${user.role}`);
-    } catch (err) {
-      toast({ title: 'Invalid username or password', description: 'Please try again.', variant: 'destructive' });
+      // Set default headers for future requests
+      // apiRequest.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+
+      // Redirect based on role - always use dashboard path for consistency
+      // For admin role, use /dashboard/admin instead of /admin
+      const redirectPath = user.role === 'admin' ? '/dashboard/admin' : `/dashboard/${user.role}`;
+      
+      toast({ 
+        title: "Welcome back!", 
+        description: `Successfully logged in as ${user.role}.`,
+        duration: 2000
+      });
+      
+      // Small delay before navigation to allow toast to show
+      setTimeout(() => {
+        navigate(redirectPath, { replace: true });
+      }, 500);
+      
+    } catch (err: any) {
+      console.error('Login error:', err);
+      
+      // Clear any existing tokens on error
+      localStorage.removeItem('authToken');
+      localStorage.removeItem('refreshToken');
+      
+      toast({ 
+        title: 'Login Failed', 
+        description: err.message || 'Invalid username or password. Please try again.', 
+        variant: 'destructive',
+        duration: 3000
+      });
     } finally {
       setIsLoading(false);
     }

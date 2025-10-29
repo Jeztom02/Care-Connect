@@ -1,8 +1,10 @@
-import { Heart, Calendar, Pill, FileText, Activity, Plus, AlertTriangle, Stethoscope, ClipboardList } from "lucide-react";
+import { Heart, Calendar, Pill, FileText, Activity, Plus, AlertTriangle, Stethoscope, ClipboardList, Thermometer, Droplets, Activity as ActivityIcon } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/ui/StatCard";
 import { BarMini } from "@/components/charts/BarMini";
+import { VitalsTrendChart } from "@/components/charts/VitalsTrendChart";
+import { VitalCard } from "@/components/ui/VitalCard";
 import { useState, useEffect } from "react";
 import { AddNoteDialog } from "@/components/patient/AddNoteDialog";
 import { UpdateVitalsDialog } from "@/components/patient/UpdateVitalsDialog";
@@ -25,24 +27,27 @@ export const PatientDashboard = () => {
   // Fetch patient data
   const { data: patientData, isLoading: isLoadingPatient } = useQuery({
     queryKey: ['patient', patientId],
-    queryFn: () => patientCareApi.getPatientInfo(patientId!), 
+    queryFn: async () => {
+      try {
+        const data = await patientCareApi.getPatientInfo(patientId!);
+        setSelectedPatient(data);
+        return data;
+      } catch (error: any) {
+        toast({
+          title: "Error",
+          description: error.message || "Failed to load patient data",
+          variant: "destructive",
+        });
+        throw error;
+      }
+    },
     enabled: !!patientId,
-    onSuccess: (data) => {
-      setSelectedPatient(data);
-    },
-    onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to load patient data",
-        variant: "destructive",
-      });
-    },
   });
 
   // Mutation for adding a note
   const addNoteMutation = useMutation({
-    mutationFn: ({ content }: { content: string }) => 
-      patientCareApi.addNote(patientId!, content),
+    mutationFn: (data: { content: string }) => 
+      patientCareApi.addNote(patientId!, data.content),
     onSuccess: () => {
       toast({
         title: "Note added",
@@ -105,7 +110,7 @@ export const PatientDashboard = () => {
   });
 
   // Fetch patient vitals
-  const { data: vitalsData, isLoading: isLoadingVitals } = useQuery({
+  const { data: vitalsData = [], isLoading: isLoadingVitals } = useQuery({
     queryKey: ['patientVitals', patientId],
     queryFn: () => patientCareApi.getVitals(patientId!),
     enabled: !!patientId,
@@ -213,6 +218,102 @@ export const PatientDashboard = () => {
           return <BarMini title="Today's Medications (taken vs pending)" data={[{ x: 'Taken', y: taken }, { x: 'Pending', y: pending }]} />;
         })()}
       </div>
+
+      {/* Vitals Section */}
+      <Card className="mb-6">
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Vital Signs</CardTitle>
+              <CardDescription>Latest health metrics and trends</CardDescription>
+            </div>
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowUpdateVitals(true)}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Record Vitals
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {isLoadingVitals ? (
+            <div className="flex items-center justify-center h-32">
+              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+            </div>
+          ) : vitalsData?.length > 0 ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                <VitalCard 
+                  title="Blood Pressure" 
+                  value={vitalsData[0].bloodPressure || '--/--'} 
+                  unit="mmHg" 
+                  icon={<Activity className="h-5 w-5" />}
+                />
+                <VitalCard 
+                  title="Heart Rate" 
+                  value={vitalsData[0].heartRate || '--'} 
+                  unit="bpm" 
+                  icon={<Heart className="h-5 w-5" />}
+                />
+                <VitalCard 
+                  title="Temperature" 
+                  value={vitalsData[0].temperature || '--'} 
+                  unit="°C" 
+                  icon={<Activity className="h-5 w-5" />}
+                />
+                <VitalCard 
+                  title="Oxygen" 
+                  value={vitalsData[0].oxygenSaturation || '--'} 
+                  unit="%" 
+                  icon={<Activity className="h-5 w-5" />}
+                />
+                <VitalCard 
+                  title="Respiratory" 
+                  value={vitalsData[0].respiratoryRate || '--'} 
+                  unit="/min" 
+                  icon={<Activity className="h-5 w-5" />}
+                />
+              </div>
+              <div className="text-xs text-muted-foreground mt-2">
+                Last recorded: {new Date(vitalsData[0].recordedAt).toLocaleString()}
+              </div>
+              
+              {/* Vitals History Chart */}
+              {vitalsData.length > 1 && (
+                <div className="mt-6">
+                  <h4 className="text-sm font-medium mb-3">Trends</h4>
+                  <div className="h-40">
+                    <VitalsTrendChart vitalsData={vitalsData} />
+                  </div>
+                </div>
+              )}
+              
+              {vitalsData[0].notes && (
+                <div className="mt-4 p-3 bg-muted/30 rounded-md">
+                  <p className="text-sm font-medium mb-1">Notes:</p>
+                  <p className="text-sm text-muted-foreground">{vitalsData[0].notes}</p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <Activity className="h-10 w-10 mx-auto text-muted-foreground mb-2" />
+              <p className="text-muted-foreground">No vitals recorded yet</p>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                className="mt-2"
+                onClick={() => setShowUpdateVitals(true)}
+              >
+                Record Vitals
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Upcoming Appointments */}
