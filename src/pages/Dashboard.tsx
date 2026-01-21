@@ -40,6 +40,20 @@ import { VolunteerPatientSupport } from "@/pages/dashboard/VolunteerPatientSuppo
 import { VolunteerReports } from "@/pages/dashboard/VolunteerReports";
 import { EmergencySOS } from "@/components/dashboard/EmergencySOS";
 import { AnimatePresence, motion } from "framer-motion";
+import { VideoConsult } from "@/pages/dashboard/VideoConsult";
+import { LabReports } from "@/pages/dashboard/LabReports";
+import { PharmacyBilling } from "@/pages/dashboard/PharmacyBilling";
+import { PatientPharmacyOrders } from "@/pages/dashboard/PatientPharmacyOrders";
+import { LabDashboard } from "@/components/dashboard/LabDashboard";
+import { PharmacyDashboard } from "@/components/dashboard/PharmacyDashboard";
+import { UploadLabReport } from "@/pages/dashboard/UploadLabReport";
+import { LabPatientRequests } from "@/pages/dashboard/LabPatientRequests";
+import { PharmacyTransactions } from "@/pages/dashboard/PharmacyTransactions";
+// import { EquipmentSale } from "@/pages/dashboard/EquipmentSale";
+import { EquipmentList } from "@/pages/Equipment/EquipmentList";
+import { AddEquipment } from "@/pages/Equipment/AddEquipment";
+import { AdminEquipmentTransactions } from '@/pages/dashboard/AdminEquipmentTransactions';
+import { AdminUsedEquipmentSales } from '@/pages/dashboard/AdminUsedEquipmentSales';
 
 export const Dashboard: React.FC<DashboardProps> = ({ role: propRole }) => {
   const params = useParams<{ role: string }>();
@@ -60,6 +74,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ role: propRole }) => {
         return <NurseDashboard />;
       case 'patient':
         return <PatientDashboard />;
+      case 'lab':
+        return <LabDashboard />;
+      case 'pharmacy':
+        return <PharmacyDashboard />;
       case 'family':
         return <FamilyDashboard />;
       case 'volunteer':
@@ -95,6 +113,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ role: propRole }) => {
             <Route path="system" element={<SystemHealth />} />
             <Route path="messages" element={<AdminMessaging />} />
             <Route path="settings" element={<AdminSettings />} />
+            <Route path="equipment" element={<EquipmentList />} />
+            <Route path="equipment/transactions" element={<AdminEquipmentTransactions />} />
+            <Route path="equipment/sales" element={<AdminUsedEquipmentSales />} />
           </>
         )}
         
@@ -105,6 +126,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ role: propRole }) => {
             <Route path="appointments" element={<Appointments userRole={role} />} />
             <Route path="records" element={<MedicalRecords />} />
             <Route path="prescriptions" element={<Prescriptions userRole={role} />} />
+            <Route path="video-consult" element={<VideoConsult />} />
+            <Route path="lab-reports" element={<LabReports />} />
+            <Route path="patient-reports" element={<LabPatientRequests />} />
+            <Route path="pharmacy" element={<PharmacyBilling />} />
+            <Route path="pharmacy-orders" element={<PatientPharmacyOrders />} />
+          </>
+        )}
+        
+        {/* Lab Routes */}
+        {role === 'lab' && (
+          <>
+            <Route path="" element={<LabDashboard />} />
+            <Route path="lab-reports" element={<LabReports />} />
+            <Route path="upload-report" element={<UploadLabReport />} />
+            <Route path="patient-reports" element={<LabPatientRequests />} />
+            <Route path="calendar" element={<Calendar userRole={role} />} />
+          </>
+        )}
+
+        {/* Pharmacy Routes */}
+        {role === 'pharmacy' && (
+          <>
+            <Route path="" element={<PharmacyDashboard />} />
+            <Route path="prescriptions" element={<Prescriptions userRole={role} />} />
+            <Route path="billing" element={<PharmacyTransactions />} />
+            <Route path="pharmacy" element={<PharmacyBilling />} />
           </>
         )}
         
@@ -115,6 +162,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ role: propRole }) => {
             <Route path="medications" element={<Medications userRole={role} />} />
             <Route path="rounds" element={<Rounds />} />
             <Route path="alerts" element={<Alerts userRole={role} />} />
+            <Route path="patient-reports" element={<LabPatientRequests />} />
           </>
         )}
         
@@ -123,8 +171,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ role: propRole }) => {
           <>
             <Route path="health" element={<MyHealth />} />
             <Route path="appointments" element={<Appointments userRole={role} />} />
+            <Route path="equipment" element={<EquipmentList />} />
+            <Route path="equipment/add" element={<AddEquipment />} />
+            <Route path="equipment/my-listings" element={<EquipmentList />} />
             <Route path="medications" element={<Medications userRole={role} />} />
-            <Route path="results" element={<TestResults />} />
+            <Route path="lab-reports" element={<LabReports />} />
+            <Route path="pharmacy" element={<PharmacyBilling />} />
+            <Route path="pharmacy-orders" element={<PatientPharmacyOrders />} />
           </>
         )}
         

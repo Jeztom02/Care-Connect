@@ -2,9 +2,12 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Users, Activity, BarChart3, Settings, MessageSquare, AlertTriangle, Calendar, UserCheck, Loader2, RefreshCw } from "lucide-react";
+import { Users, Activity, BarChart3, Settings, MessageSquare, AlertTriangle, Calendar, UserCheck, Loader2, RefreshCw, Bell } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { StatCard } from "@/components/ui/StatCard";
+import { useEmergencyAlerts } from "@/hooks/useApi";
+import { useSocket } from "@/hooks/useSocket";
+import { AIInsightsPanel } from "./AIInsightsPanel";
 
 interface DashboardOverview {
   overview: {
@@ -26,6 +29,8 @@ export const AdminDashboard = () => {
   const { toast } = useToast();
   const [dashboardData, setDashboardData] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(false);
+  const { data: emergencyAlerts, loading: alertsLoading, refetch: refetchAlerts } = useEmergencyAlerts('active', 10);
+  const { socket, connected } = useSocket();
 
   const fetchDashboardData = async () => {
     setLoading(true);
@@ -55,6 +60,29 @@ export const AdminDashboard = () => {
   useEffect(() => {
     fetchDashboardData();
   }, []);
+
+  // Listen for real-time emergency alerts
+  useEffect(() => {
+    if (!socket || !connected) return;
+
+    const handleEmergencyAlert = (payload: any) => {
+      console.log('New emergency alert received:', payload);
+      toast({
+        title: "🚨 Emergency Alert",
+        description: `${payload.patient?.name || 'Patient'} - ${payload.priority} priority`,
+        variant: "destructive",
+        duration: 8000,
+      });
+      // Refetch alerts to update the list
+      refetchAlerts();
+    };
+
+    socket.on('emergency_alert', handleEmergencyAlert);
+
+    return () => {
+      socket.off('emergency_alert', handleEmergencyAlert);
+    };
+  }, [socket, connected, refetchAlerts, toast]);
 
   const getSystemHealthPercentage = () => {
     if (!dashboardData?.systemHealth) return 89;
@@ -210,6 +238,77 @@ export const AdminDashboard = () => {
               </CardContent>
             </Card>
           )}
+
+          {/* Emergency Alerts Section */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Bell className="h-5 w-5 text-destructive" />
+                  Active Emergency Alerts
+                </CardTitle>
+                <Button onClick={refetchAlerts} variant="outline" size="sm">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {alertsLoading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin mr-2" />
+                  Loading alerts...
+                </div>
+              ) : !emergencyAlerts || emergencyAlerts.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  No active emergency alerts
+                </div>
+              ) : (
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {emergencyAlerts.map((alert: any) => (
+                    <div key={alert._id} className="p-3 border border-border rounded-lg hover:bg-accent/50 transition-colors">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-start gap-3 flex-1">
+                          <div className={`p-2 rounded-lg ${
+                            alert.priority === 'high' ? 'bg-red-100' :
+                            alert.priority === 'medium' ? 'bg-orange-100' : 'bg-yellow-100'
+                          }`}>
+                            <AlertTriangle className={`h-4 w-4 ${
+                              alert.priority === 'high' ? 'text-red-600' :
+                              alert.priority === 'medium' ? 'text-orange-600' : 'text-yellow-600'
+                            }`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant={alert.priority === 'high' ? 'destructive' : 'default'}>
+                                {alert.priority.toUpperCase()}
+                              </Badge>
+                              <span className="font-semibold text-sm">
+                                {alert.patientId?.name || 'Unknown Patient'}
+                              </span>
+                              {alert.patientId?.roomNumber && (
+                                <span className="text-xs text-muted-foreground">
+                                  Room {alert.patientId.roomNumber}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium mb-1">{alert.title}</p>
+                            <p className="text-sm text-muted-foreground line-clamp-2">{alert.details}</p>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              {new Date(alert.createdAt).toLocaleString()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* AI Insights Panel */}
+          <AIInsightsPanel />
 
           {/* Recent Activity */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

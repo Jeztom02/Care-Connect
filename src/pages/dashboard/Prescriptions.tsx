@@ -59,10 +59,26 @@ export const Prescriptions = ({ userRole }: PrescriptionsProps) => {
 
   const enrichedPrescriptions = useMemo(() => {
     return prescriptions.map((p: any) => {
-      const existing = String(p.patientName || p.patient || '');
-      if (existing.trim()) return p;
-      const pid = String(p.patientId || (p.patient?._id));
+      // If patientName already exists and has content, use it
+      if (p.patientName && String(p.patientName).trim()) {
+        return p;
+      }
+      
+      // Try to get from populated patientId object (from backend)
+      if (p.patientId && typeof p.patientId === 'object') {
+        const patient = p.patientId;
+        const name = (patient.firstName || patient.lastName)
+          ? [patient.firstName, patient.lastName].filter(Boolean).join(' ')
+          : (patient.name || '');
+        if (name.trim()) {
+          return { ...p, patientName: name };
+        }
+      }
+      
+      // Try to get from patientsMap using patientId string
+      const pid = typeof p.patientId === 'string' ? p.patientId : String(p.patientId?._id || '');
       const name = patientsMap.get(pid) || '';
+      
       return { ...p, patientName: name };
     });
   }, [prescriptions, patientsMap]);
@@ -362,7 +378,7 @@ export const Prescriptions = ({ userRole }: PrescriptionsProps) => {
                     {userRole !== 'patient' && (
                       <div className="flex items-center gap-1 text-sm text-muted-foreground mb-2">
                         <User className="h-4 w-4" />
-                        <span>{prescription.patientName || prescription.patient || ''}</span>
+                        <span>{prescription.patientName || 'Patient'}</span>
                       </div>
                     )}
                     <p className="text-sm text-muted-foreground">{prescription.notes}</p>

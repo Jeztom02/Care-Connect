@@ -570,3 +570,20 @@ export const useNurseAlerts = () => {
     }
   );
 };
+
+// Emergency Alerts (patient care alerts for staff)
+export const useEmergencyAlerts = (status?: 'active' | 'acknowledged' | 'resolved', limit = 20) => {
+  const query = new URLSearchParams();
+  if (status) query.set('status', status);
+  if (limit) query.set('limit', String(limit));
+  const qs = query.toString();
+  return useApi(
+    () => apiRequest(`/api/patient-care/alerts${qs ? `?${qs}` : ''}`),
+    [qs],
+    {
+      onError: (error) => {
+        console.error('Failed to fetch emergency alerts:', error);
+      }
+    }
+  );
+};

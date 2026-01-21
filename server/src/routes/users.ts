@@ -47,6 +47,32 @@ usersRouter.get('/patients', authorizeRoles('doctor', 'nurse', 'admin'), async (
   }
 });
 
+// Get users by role (all authenticated roles)
+usersRouter.get('/by-role', async (req: Request, res: Response) => {
+  try {
+    const role = String(req.query.role || '').trim();
+    if (!role) return res.status(400).json({ message: 'Role parameter is required' });
+
+    const users = await User.find({ role, isActive: true })
+      .select('_id name email preferences.doctor.specialty')
+      .sort({ name: 1 });
+    
+    // Transform to flatten specialty field for easier frontend consumption
+    const results = users.map((user: any) => ({
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      specialization: user.preferences?.doctor?.specialty || undefined
+    }));
+    
+    res.json(results);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[USERS][BY_ROLE] Error:', (err as Error).message);
+    res.status(500).json({ message: 'Failed to fetch users by role' });
+  }
+});
+
 // Global search users (all authenticated roles)
 // Query by name/email partial match and/or role exact match
 usersRouter.get('/search', async (req: Request, res: Response) => {

@@ -42,7 +42,8 @@
     "socket.io": "^4.7.2",
     "typescript": "^5.8.3",
     "ws": "^8.18.3",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "node-fetch": "^3.4.1"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

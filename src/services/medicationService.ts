@@ -313,6 +313,46 @@ const medicationService = {
       
       throw new Error('Failed to fetch patient medications. Please try again.');
     }
+  },
+
+  // Get combined medications and prescriptions for a patient
+  getCombinedMedications: async (patientId: string): Promise<Medication[]> => {
+    if (!patientId) {
+      console.error('[MedicationService] No patient ID provided');
+      return [];
+    }
+    
+    try {
+      console.log('[MedicationService] Fetching combined medications for patient:', patientId);
+      const url = `/medications/patient/${patientId}/combined`;
+      console.log('[MedicationService] Request URL:', url);
+      const response = await api.get(url);
+      console.log('[MedicationService] Response received:', response.data?.length || 0, 'items');
+      return response.data;
+    } catch (error: any) {
+      console.error(`[MedicationService] Error fetching combined medications for patient ${patientId}:`, error);
+      console.error('[MedicationService] Error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data
+      });
+      
+      if (error.response) {
+        if (error.response.status === 401) {
+          throw new Error('Your session has expired. Please log in again.');
+        } else if (error.response.status === 403) {
+          throw new Error('You do not have permission to view these medications.');
+        } else if (error.response.status === 404) {
+          // Return empty array if no medications found for the patient
+          console.log('[MedicationService] No medications found (404), returning empty array');
+          return [];
+        } else if (error.response.data?.message) {
+          throw new Error(error.response.data.message);
+        }
+      }
+      
+      throw new Error('Failed to fetch combined medications. Please try again.');
+    }
   }
 };
 

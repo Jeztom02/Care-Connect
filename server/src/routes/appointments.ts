@@ -25,6 +25,9 @@ appointmentsRouter.get('/', async (req: Request, res: Response) => {
     // Family members can see appointments for their associated patient
     // For now, we'll show all appointments - in a real app, you'd link family to specific patients
     items = await Appointment.find().populate('patientId').sort({ startsAt: -1 });
+  } else if (user.role === 'lab') {
+    // Lab users can see all appointments (for lab test scheduling)
+    items = await Appointment.find().populate('patientId').sort({ startsAt: -1 });
   } else {
     return res.status(403).json({ message: 'Access denied' });
   }
@@ -38,29 +41,75 @@ appointmentsRouter.get('/:id', authorizeRoles('doctor', 'nurse', 'admin'), async
   res.json(item);
 });
 
-appointmentsRouter.post('/', authorizeRoles('doctor', 'nurse', 'admin'), async (req: Request, res: Response) => {
-  const { patientId, startsAt, endsAt, status, title, location, mode, notes } = req.body ?? {};
-  if (!patientId || !startsAt || !endsAt) return res.status(400).json({ message: 'patientId, startsAt, endsAt required' });
-  const created = await Appointment.create({
-    patientId,
-    doctorId: req.user!.role === 'doctor' ? req.user!.sub : undefined,
-    title,
-    startsAt: new Date(startsAt),
-    endsAt: new Date(endsAt),
-    status,
-    location,
-    mode,
-    notes,
-  });
-  const io = getIO();
-  if (io) {
-    const payload = { ...created.toObject(), _id: String(created._id) };
-    if (created.doctorId) io.to(String(created.doctorId)).emit('appointment:new', payload);
-    io.to(String(created.patientId)).emit('appointment:new', payload);
-    // Global channel for dashboards that need broad updates (e.g., admin/nurse calendars)
-    io.emit('appointments:all', payload);
+appointmentsRouter.post('/', async (req: Request, res: Response) => {
+  const user = req.user!;
+  const { patientId, doctorId, startsAt, endsAt, status, title, location, mode, notes } = req.body ?? {};
+  
+  // Validation based on role
+  if (user.role === 'patient') {
+    // Patients must provide doctorId, patientId is auto-derived
+    if (!doctorId || !startsAt || !endsAt) {
+      return res.status(400).json({ message: 'doctorId, startsAt, endsAt required for patient appointments' });
+    }
+    
+    // Find patient document for logged-in user
+    const selfPatient = await Patient.findOne({ userId: user.sub }).select('_id');
+    if (!selfPatient) {
+      return res.status(404).json({ message: 'Patient record not found for current user' });
+    }
+    
+    // Create appointment with auto-populated patientId
+    const created = await Appointment.create({
+      patientId: selfPatient._id,
+      doctorId,
+      title,
+      startsAt: new Date(startsAt),
+      endsAt: new Date(endsAt),
+      status: status || 'SCHEDULED',
+      location,
+      mode,
+      notes,
+    });
+    
+    const io = getIO();
+    if (io) {
+      const payload = { ...created.toObject(), _id: String(created._id) };
+      io.to(String(created.doctorId)).emit('appointment:new', payload);
+      io.to(String(created.patientId)).emit('appointment:new', payload);
+      io.emit('appointments:all', payload);
+    }
+    
+    return res.status(201).json(created);
+  } else if (user.role === 'doctor' || user.role === 'nurse' || user.role === 'admin') {
+    // Doctors/Nurses/Admins must provide patientId
+    if (!patientId || !startsAt || !endsAt) {
+      return res.status(400).json({ message: 'patientId, startsAt, endsAt required' });
+    }
+    
+    const created = await Appointment.create({
+      patientId,
+      doctorId: user.role === 'doctor' ? user.sub : doctorId,
+      title,
+      startsAt: new Date(startsAt),
+      endsAt: new Date(endsAt),
+      status,
+      location,
+      mode,
+      notes,
+    });
+    
+    const io = getIO();
+    if (io) {
+      const payload = { ...created.toObject(), _id: String(created._id) };
+      if (created.doctorId) io.to(String(created.doctorId)).emit('appointment:new', payload);
+      io.to(String(created.patientId)).emit('appointment:new', payload);
+      io.emit('appointments:all', payload);
+    }
+    
+    return res.status(201).json(created);
+  } else {
+    return res.status(403).json({ message: 'Access denied' });
   }
-  res.status(201).json(created);
 });
 
 appointmentsRouter.put('/:id', authorizeRoles('doctor', 'nurse', 'admin'), async (req: Request, res: Response) => {

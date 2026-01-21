@@ -15,7 +15,8 @@ import {
   UserCheck,
   Clock,
   LogOut,
-  ClipboardList
+  ClipboardList,
+  ShoppingCart
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -62,24 +63,43 @@ export const DashboardSidebar = ({ userRole }: DashboardSidebarProps) => {
         { title: "User Management", url: `/dashboard/${role}/users`, icon: Users },
         { title: "Analytics", url: `/dashboard/${role}/analytics`, icon: BarChart3 },
         { title: "System Health", url: `/dashboard/${role}/system`, icon: Activity },
+        { title: "Equipment", url: `/dashboard/${role}/equipment`, icon: ClipboardList },
+        { title: "Equipment Transactions", url: `/dashboard/${role}/equipment/transactions`, icon: ClipboardList },
+        { title: "Used Equipment Sales", url: `/dashboard/${role}/equipment/sales`, icon: ClipboardList },
       ],
       doctor: [
         { title: "Patients", url: `/dashboard/${role}/patients`, icon: Users },
         { title: "Appointments", url: `/dashboard/${role}/appointments`, icon: Calendar },
         { title: "Medical Records", url: `/dashboard/${role}/records`, icon: FileText },
         { title: "Prescriptions", url: `/dashboard/${role}/prescriptions`, icon: Pill },
+        { title: "Video Consult", url: `/dashboard/${role}/video-consult`, icon: Stethoscope },
+        { title: "Lab Reports", url: `/dashboard/${role}/lab-reports`, icon: FileText },
+        { title: "Lab Requests", url: `/dashboard/${role}/patient-reports`, icon: Users },
+        { title: "Pharmacy", url: `/dashboard/${role}/pharmacy`, icon: Pill },
       ],
       nurse: [
         { title: "Patient Care", url: `/dashboard/${role}/patient-care`, icon: Heart },
         { title: "Medications", url: `/dashboard/${role}/medications`, icon: Pill },
         { title: "Rounds", url: `/dashboard/${role}/rounds`, icon: Clock },
         { title: "Alerts", url: `/dashboard/${role}/alerts`, icon: AlertTriangle },
+        { title: "Lab Requests", url: `/dashboard/${role}/patient-reports`, icon: Users },
+      ],
+      lab: [
+        { title: "Upload Reports", url: `/dashboard/${role}/upload-report`, icon: FileText },
+        { title: "Patient Reports", url: `/dashboard/${role}/patient-reports`, icon: Users },
+      ],
+      pharmacy: [
+        { title: "Pharmacy Dashboard", url: `/dashboard/${role}`, icon: Pill },
+        { title: "Prescriptions", url: `/dashboard/${role}/prescriptions`, icon: Pill },
+        { title: "Billing", url: `/dashboard/${role}/billing`, icon: ClipboardList },
       ],
       patient: [
         { title: "My Health", url: `/dashboard/${role}/health`, icon: Heart },
         { title: "Appointments", url: `/dashboard/${role}/appointments`, icon: Calendar },
         { title: "Medications", url: `/dashboard/${role}/medications`, icon: Pill },
-        { title: "Test Results", url: `/dashboard/${role}/results`, icon: FileText },
+        { title: "Equipment", url: `/dashboard/${role}/equipment`, icon: ShoppingCart },
+        { title: "Lab Reports", url: `/dashboard/${role}/lab-reports`, icon: FileText },
+        { title: "Pharmacy Orders", url: `/dashboard/${role}/pharmacy-orders`, icon: ShoppingCart },
       ],
       family: [
         { title: "Patient Status", url: `/dashboard/${role}/patient-status`, icon: UserCheck },

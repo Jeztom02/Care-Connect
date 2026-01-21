@@ -1,17 +1,19 @@
 import mongoose, { Schema, model } from 'mongoose';
+export { AIClassification } from './models/aiClassification';
 
-export type UserRole = 'admin' | 'doctor' | 'nurse' | 'patient' | 'family' | 'volunteer';
+export type UserRole = 'admin' | 'doctor' | 'nurse' | 'patient' | 'family' | 'volunteer' | 'lab' | 'pharmacy';
 
 const userSchema = new Schema({
   email: { type: String, unique: true, required: true, lowercase: true, trim: true },
   name: { type: String, required: true },
-  role: { type: String, enum: ['admin', 'doctor', 'nurse', 'patient', 'family', 'volunteer'], required: true },
+  role: { type: String, enum: ['admin', 'doctor', 'nurse', 'patient', 'family', 'volunteer', 'lab', 'pharmacy'], required: true },
   passwordHash: { type: String, required: false }, // Made optional for Google OAuth users
   phone: { type: String, unique: true, sparse: true },
   googleId: { type: String, unique: true, sparse: true }, // Google OAuth ID
   profilePicture: { type: String }, // Google profile picture URL
   authProvider: { type: String, enum: ['local', 'google'], default: 'local' }, // Track auth method
   isActive: { type: Boolean, default: true }, // Account status
+  approvalStatus: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'approved' }, // Approval status for staff roles
   lastLoginAt: { type: Date }, // Track last login
   // Password reset fields
   resetPasswordTokenHash: { type: String },

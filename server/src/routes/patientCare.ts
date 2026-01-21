@@ -6,6 +6,7 @@ import { PatientNote } from '../models/patientNote';
 import { PatientVital } from '../models/patientVital';
 import { EmergencyAlert } from '../models/emergencyAlert';
 import { JwtPayload, UserRole } from '../types';
+import { getRoleRoom } from '../types/socket';
 
 // Extend the Express Request type to include user
 export interface AuthenticatedRequest extends Request {
@@ -24,6 +25,35 @@ router.post('/:patientId/notes', authorizeRoles('doctor', 'nurse'), async (req: 
   try {
     if (!req.user) {
       return res.status(401).json({ message: 'Unauthorized' });
+
+// List emergency alerts for a patient (optionally filter by status)
+router.get('/:patientId/alerts', authorizeRoles('doctor', 'nurse', 'admin', 'patient'), async (req: Request, res: Response) => {
+  try {
+    const { patientId } = req.params;
+    const { status } = req.query as { status?: string };
+
+    // If patient user, ensure they can only access their own alerts
+    if (req.user?.role === 'patient' && req.user.sub !== patientId) {
+      return res.status(403).json({ message: 'You can only view your own alerts' });
+    }
+
+    const filter: any = { patientId };
+    if (status) {
+      const allowed = ['active', 'acknowledged', 'resolved'];
+      if (!allowed.includes(String(status))) {
+        return res.status(400).json({ message: 'Invalid status filter' });
+      }
+      filter.status = status;
+    }
+
+    const alerts = await EmergencyAlert.find(filter)
+      .sort({ createdAt: -1 });
+    res.json(alerts);
+  } catch (error) {
+    console.error('Error fetching emergency alerts:', error);
+    res.status(500).json({ message: 'Failed to fetch emergency alerts' });
+  }
+});
     }
     
     const { patientId } = req.params;
@@ -291,31 +321,33 @@ router.post('/:patientId/alerts', authorizeRoles('doctor', 'nurse', 'admin'), as
       return res.status(404).json({ message: 'Patient not found' });
     }
 
-    // Create the alert
+    // Create the alert (schema requires title and createdBy object)
     const alert = new EmergencyAlert({
       patientId: patient._id,
+      title: `${priority.charAt(0).toUpperCase()}${priority.slice(1)} Priority Emergency Alert`,
       priority,
       details: details.trim(),
       status: 'active',
-      createdBy: userId,
-      createdAt: new Date(),
-      updatedAt: new Date()
+      createdBy: {
+        userId: userId as unknown as mongoose.Types.ObjectId,
+        role: req.user.role,
+        name: req.user.name || 'Unknown User'
+      }
     });
 
     await alert.save({ session });
     
-    // Update patient's lastAlert timestamp
-    patient.lastAlert = new Date();
+    // Persist patient (optional further updates can be added here)
     await patient.save({ session });
     
     // Commit the transaction
     await session.commitTransaction();
     session.endSession();
     
-    // Emit socket event for real-time updates to all connected staff
+    // Emit socket event for real-time updates to medical staff (admin/doctor/nurse)
     const io = req.app.get('io');
     if (io) {
-      io.to('staff').emit('emergency_alert', {
+      const payload = {
         ...alert.toObject(),
         patient: { 
           _id: patient._id, 
@@ -327,7 +359,10 @@ router.post('/:patientId/alerts', authorizeRoles('doctor', 'nurse', 'admin'), as
           name: req.user.name || 'Unknown User', 
           role: req.user.role 
         }
-      });
+      };
+      io.to(getRoleRoom('admin')).emit('emergency_alert', payload);
+      io.to(getRoleRoom('doctor')).emit('emergency_alert', payload);
+      io.to(getRoleRoom('nurse')).emit('emergency_alert', payload);
     }
 
     res.status(201).json({
@@ -411,6 +446,31 @@ router.get('/:patientId/vitals', authorizeRoles('doctor', 'nurse', 'admin', 'pat
   } catch (error) {
     console.error('Error fetching patient vitals:', error);
     res.status(500).json({ message: 'Failed to fetch patient vitals' });
+  }
+});
+
+// List recent emergency alerts (staff-wide)
+router.get('/alerts', authorizeRoles('doctor', 'nurse', 'admin'), async (req: Request, res: Response) => {
+  try {
+    const { status, limit = '20' } = req.query as { status?: string; limit?: string };
+    const filter: any = {};
+    if (status) {
+      const allowed = ['active', 'acknowledged', 'resolved'];
+      if (!allowed.includes(String(status))) {
+        return res.status(400).json({ message: 'Invalid status filter' });
+      }
+      filter.status = status;
+    }
+
+    const items = await EmergencyAlert.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(Math.max(1, Math.min(100, parseInt(String(limit)) || 20)))
+      .populate('patientId', 'name roomNumber');
+
+    res.json(items);
+  } catch (error) {
+    console.error('Error fetching recent emergency alerts:', error);
+    res.status(500).json({ message: 'Failed to fetch emergency alerts' });
   }
 });
 

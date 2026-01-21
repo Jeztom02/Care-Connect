@@ -34,7 +34,7 @@ export const ProtectedRoute = ({ children, allowRoles, role }: ProtectedRoutePro
     const pathParts = currentPath.split('/').filter(Boolean);
     if (pathParts.length > 1 && pathParts[0] === 'dashboard') {
       const roleFromPath = pathParts[1];
-      if (['admin', 'doctor', 'nurse', 'patient', 'family'].includes(roleFromPath)) {
+      if (['admin', 'doctor', 'nurse', 'patient', 'family', 'lab', 'pharmacy', 'volunteer'].includes(roleFromPath)) {
         console.log(`[ProtectedRoute] Setting user role from URL: ${roleFromPath}`);
         localStorage.setItem('userRole', roleFromPath);
         // Force a re-render with the new role

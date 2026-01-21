@@ -5,7 +5,7 @@ import { Patient } from '../models';
 export const patientsRouter = Router();
 patientsRouter.use(authenticateJwt);
 
-patientsRouter.get('/', authorizeRoles('doctor', 'nurse', 'admin', 'volunteer'), async (req: Request, res: Response) => {
+patientsRouter.get('/', authorizeRoles('doctor', 'nurse', 'admin', 'volunteer', 'lab'), async (req: Request, res: Response) => {
   const user = req.user!;
   const { q, status, priority, doctor } = req.query as any;
 

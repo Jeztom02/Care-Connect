@@ -1,25 +1,52 @@
 import { Router, Request, Response } from 'express';
 import { authenticateJwt, authorizeRoles } from '../auth';
 import { Prescription, Patient, User } from '../models';
+import { Medicine } from '../models/medicine';
+import { PharmacyOrder } from '../models/pharmacyOrder';
 
 export const prescriptionsRouter = Router();
 prescriptionsRouter.use(authenticateJwt);
 
-// List all prescriptions (staff)
-prescriptionsRouter.get('/', authorizeRoles('doctor', 'nurse', 'admin'), async (_req: Request, res: Response) => {
-  const items = await Prescription.find().sort({ createdAt: -1 });
+// List all prescriptions (staff + pharmacy)
+prescriptionsRouter.get('/', authorizeRoles('doctor', 'nurse', 'admin', 'pharmacy'), async (_req: Request, res: Response) => {
+  const items = await Prescription.find()
+    .populate('patientId', 'name firstName lastName email')
+    .populate('doctorId', 'name firstName lastName email')
+    .sort({ createdAt: -1 });
   res.json(items);
 });
 
 // Get prescriptions for a patient
-prescriptionsRouter.get('/:patientId', authorizeRoles('doctor', 'nurse', 'admin', 'patient', 'family'), async (req: Request, res: Response) => {
+prescriptionsRouter.get('/patient/:patientId', authorizeRoles('doctor', 'nurse', 'admin', 'patient', 'family'), async (req: Request, res: Response) => {
   const { patientId } = req.params;
-  const items = await Prescription.find({ patientId }).sort({ createdAt: -1 });
+  const items = await Prescription.find({ patientId })
+    .populate('patientId', 'name firstName lastName email')
+    .populate('doctorId', 'name firstName lastName email')
+    .sort({ createdAt: -1 });
   res.json(items);
 });
 
-// Create a prescription (doctor/admin)
-prescriptionsRouter.post('/', authorizeRoles('doctor', 'admin'), async (req: Request, res: Response) => {
+// Get prescriptions for a patient (legacy endpoint, kept for backward compatibility)
+prescriptionsRouter.get('/:patientId', authorizeRoles('doctor', 'nurse', 'admin', 'patient', 'family'), async (req: Request, res: Response) => {
+  const { patientId } = req.params;
+  // Check if this is a detail endpoint (MongoDB ObjectId format)
+  if (patientId.match(/^[0-9a-fA-F]{24}$/)) {
+    // Check if it's a prescription ID by trying to find it
+    const prescriptionById = await Prescription.findById(patientId);
+    if (prescriptionById) {
+      return res.json(prescriptionById);
+    }
+  }
+  // Otherwise treat as patient ID
+  const items = await Prescription.find({ patientId })
+    .populate('patientId', 'name firstName lastName email')
+    .populate('doctorId', 'name firstName lastName email')
+    .sort({ createdAt: -1 });
+  res.json(items);
+});
+
+// Create a prescription (doctor only)
+prescriptionsRouter.post('/', authorizeRoles('doctor'), async (req: Request, res: Response) => {
   try {
     const { patientId, appointmentId, medication, dosage, frequency, duration, notes, startDate, endDate, status, items } = req.body ?? {};
     // Log incoming payload (without sensitive data)
@@ -48,13 +75,26 @@ prescriptionsRouter.post('/', authorizeRoles('doctor', 'admin'), async (req: Req
         if (!it?.medication || !it?.dosage || !it?.frequency) {
           return res.status(400).json({ message: 'Each item requires medication, dosage, frequency' });
         }
+        // If medication looks like a Medicine id, validate it exists in pharmacy inventory
+        try {
+          const medId = String(it.medication || '');
+          const isObjectId = medId && medId.match(/^[0-9a-fA-F]{24}$/);
+          if (isObjectId) {
+            const exists = await Medicine.exists({ _id: medId });
+            if (!exists) {
+              return res.status(400).json({ message: `Referenced medicine ${medId} not found in pharmacy inventory` });
+            }
+          }
+        } catch (e) {
+          // ignore validation errors here and let create fail later if necessary
+        }
       }
     }
 
     // Validate references exist
     const [patientExists, doctorExists] = await Promise.all([
       Patient.exists({ _id: patientId }),
-      User.exists({ _id: req.user!.sub, role: { $in: ['doctor', 'admin'] } })
+      User.exists({ _id: req.user!.sub, role: 'doctor' })
     ]);
     if (!patientExists) {
       return res.status(400).json({ message: 'Invalid patientId' });
@@ -85,6 +125,43 @@ prescriptionsRouter.post('/', authorizeRoles('doctor', 'admin'), async (req: Req
       endDate: endDate ? new Date(endDate) : undefined,
       status,
     });
+
+    // Automatically create pharmacy order from prescription
+    try {
+      const orderItems = usingItems 
+        ? itemsArray.map((it: any) => ({
+            medication: String(it.medication),
+            dosage: String(it.dosage),
+            quantity: 1, // Default quantity
+            price: 0, // Will be filled by pharmacy
+            instructions: it.instructions || `${it.frequency}, ${it.duration || duration || ''}`
+          }))
+        : [{
+            medication,
+            dosage,
+            quantity: 1,
+            price: 0,
+            instructions: `${frequency}, ${duration || ''}`
+          }];
+
+      await PharmacyOrder.create({
+        prescriptionId: created._id,
+        patientId: created.patientId,
+        doctorId: created.doctorId,
+        items: orderItems,
+        totalAmount: 0,
+        status: 'Pending',
+        paymentStatus: 'Pending',
+        deliveryMethod: 'Pickup'
+      });
+      // eslint-disable-next-line no-console
+      console.log('[RX][CREATE] Auto-created pharmacy order for prescription', String(created._id));
+    } catch (orderErr) {
+      // eslint-disable-next-line no-console
+      console.error('[RX][CREATE] Failed to auto-create pharmacy order', orderErr);
+      // Continue without failing the prescription creation
+    }
+
     // eslint-disable-next-line no-console
     console.log('[RX][CREATE] Success', { id: String(created._id), patientId: String(created.patientId), doctorId: String(created.doctorId) });
     return res.status(201).json(created);
@@ -96,8 +173,8 @@ prescriptionsRouter.post('/', authorizeRoles('doctor', 'admin'), async (req: Req
   }
 });
 
-// Update prescription (doctor/admin)
-prescriptionsRouter.put('/:id', authorizeRoles('doctor', 'admin'), async (req: Request, res: Response) => {
+// Update prescription (doctor only)
+prescriptionsRouter.put('/:id', authorizeRoles('doctor'), async (req: Request, res: Response) => {
   const { medication, dosage, frequency, duration, notes, startDate, endDate, status, items } = req.body ?? {};
   const update: any = { duration, notes, status };
   if (startDate) update.startDate = new Date(startDate);
@@ -173,4 +250,35 @@ prescriptionsRouter.delete('/:id', authorizeRoles('admin'), async (req: Request,
   const deleted = await Prescription.findByIdAndDelete(req.params.id);
   if (!deleted) return res.status(404).json({ message: 'Not found' });
   res.status(204).end();
+});
+
+// Fulfill prescription (pharmacy only)
+prescriptionsRouter.put('/:id/fulfill', authorizeRoles('pharmacy', 'admin'), async (req: Request, res: Response) => {
+  try {
+    const { status, notes } = req.body ?? {};
+    const rx = await Prescription.findById(req.params.id);
+    
+    if (!rx) return res.status(404).json({ message: 'Prescription not found' });
+    
+    // Update status
+    if (status) rx.status = status as any;
+    
+    // Append fulfillment notes
+    if (notes) {
+      const fulfillmentNote = `[Pharmacy] ${new Date().toISOString()}: ${notes}`;
+      rx.notes = rx.notes ? `${rx.notes}\n${fulfillmentNote}` : fulfillmentNote;
+    }
+    
+    await rx.save();
+    
+    const populated = await Prescription.findById(rx._id)
+      .populate('patientId', 'name firstName lastName email')
+      .populate('doctorId', 'name firstName lastName email');
+    
+    res.json(populated);
+  } catch (err) {
+    console.error('[RX][FULFILL] Error', err);
+    const msg = (err as any)?.message || 'Failed to fulfill prescription';
+    return res.status(500).json({ message: msg });
+  }
 });

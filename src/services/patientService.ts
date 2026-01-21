@@ -5,9 +5,10 @@ import { Role } from '@/types';
 export interface Patient {
   _id: string;
   userId?: string;
-  firstName: string;
-  lastName: string;
-  email: string;
+  name?: string; // Backend uses single name field
+  firstName?: string; // For compatibility
+  lastName?: string; // For compatibility
+  email?: string;
   phone?: string;
   dateOfBirth?: string;
   gender?: string;
@@ -117,11 +118,11 @@ const patientService = {
    */
   searchPatients: async (query: string, filters: Record<string, any> = {}): Promise<Patient[]> => {
     if (!query?.trim()) {
-      throw new Error('Search query cannot be empty');
+      return [];
     }
     
     try {
-      const response = await api.get<Patient[]>('/patients/search', { 
+      const response = await api.get<Patient[]>('/patients', { 
         params: { 
           q: query.trim(),
           ...filters 

@@ -17,13 +17,16 @@ export const Calendar = ({ userRole }: CalendarProps) => {
   const { on, off } = useSocket();
 
   useEffect(() => {
+    // Only set up socket listeners if socket functions are available
+    if (!on || !off) return;
+    
     const handlers: Array<[string, () => void]> = [
       ['appointment:new', () => refetch()],
       ['appointment:updated', () => refetch()],
       ['appointment:deleted', () => refetch()],
     ];
-    handlers.forEach(([e, h]) => on?.(e, h));
-    return () => handlers.forEach(([e, h]) => off?.(e, h));
+    handlers.forEach(([e, h]) => on(e, h));
+    return () => handlers.forEach(([e, h]) => off(e, h));
   }, [on, off, refetch]);
 
   const appointments = useMemo(() => {
@@ -32,20 +35,27 @@ export const Calendar = ({ userRole }: CalendarProps) => {
       const start = new Date(a.startsAt);
       const end = new Date(a.endsAt);
       const durationMin = Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60)));
+      
+      // Adapt for lab role - show test appointments
+      const isLabRole = userRole === 'lab';
+      const title = isLabRole ? (a.testName || a.title || 'Lab Test') : (a.title || 'Medical Appointment');
+      const subtitle = isLabRole ? (a.testType || 'Lab Test') : undefined;
+      
       return {
         id: String(a._id),
-        title: a.title || 'Medical Appointment',
+        title,
+        subtitle,
         patient: a.patientId?.name || 'Patient',
         doctor: a.doctor || undefined,
-        location: a.location || (a.mode === 'Virtual' ? 'Video Call' : 'Room'),
-        mode: a.mode || 'In-person',
+        location: a.location || (a.mode === 'Virtual' ? 'Lab Station' : 'Lab Room'),
+        mode: a.mode || (isLabRole ? 'Lab Test' : 'In-person'),
         status: a.status || 'SCHEDULED',
         date: new Date(start),
         timeStr: start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         durationStr: `${durationMin} min`,
       };
     });
-  }, [data]);
+  }, [data, userRole]);
 
   const getDaysInMonth = (date: Date) => {
     return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
@@ -130,8 +140,14 @@ export const Calendar = ({ userRole }: CalendarProps) => {
           <CalendarIcon className="h-6 w-6 text-primary" />
         </div>
         <div>
-          <h1 className="text-3xl font-bold text-foreground">Calendar</h1>
-          <p className="text-muted-foreground">Manage your appointments and schedule</p>
+          <h1 className="text-3xl font-bold text-foreground">
+            {userRole === 'lab' ? 'Lab Schedule' : 'Calendar'}
+          </h1>
+          <p className="text-muted-foreground">
+            {userRole === 'lab' 
+              ? 'Manage lab test appointments and schedule' 
+              : 'Manage your appointments and schedule'}
+          </p>
         </div>
       </div>
 
@@ -152,7 +168,7 @@ export const Calendar = ({ userRole }: CalendarProps) => {
                 </Button>
                 <Button size="sm">
                   <Plus className="h-4 w-4 mr-2" />
-                  New Appointment
+                  {userRole === 'lab' ? 'Schedule Test' : 'New Appointment'}
                 </Button>
               </div>
             </div>
@@ -203,6 +219,9 @@ export const Calendar = ({ userRole }: CalendarProps) => {
                           {appointment.mode}
                         </Badge>
                       </div>
+                      {(appointment as any).subtitle && (
+                        <p className="text-xs text-muted-foreground">{(appointment as any).subtitle}</p>
+                      )}
                       <div className="space-y-1 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
                           <Clock className="h-3 w-3" />
@@ -219,7 +238,7 @@ export const Calendar = ({ userRole }: CalendarProps) => {
                       </div>
                       <div className="flex gap-2 mt-3">
                         <Button size="sm" variant="outline" className="flex-1">
-                          Reschedule
+                          {userRole === 'lab' ? 'Reschedule Test' : 'Reschedule'}
                         </Button>
                         <Button size="sm" variant="outline" className="flex-1">
                           Cancel
@@ -229,7 +248,11 @@ export const Calendar = ({ userRole }: CalendarProps) => {
                   ))}
                 </div>
               ) : (
-                <p className="text-muted-foreground text-sm">No appointments scheduled for this day.</p>
+                <p className="text-muted-foreground text-sm">
+                  {userRole === 'lab' 
+                    ? 'No lab tests scheduled for this day.' 
+                    : 'No appointments scheduled for this day.'}
+                </p>
               )}
             </CardContent>
           </Card>
@@ -237,7 +260,9 @@ export const Calendar = ({ userRole }: CalendarProps) => {
           {/* Upcoming Appointments */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Upcoming Appointments</CardTitle>
+              <CardTitle className="text-lg">
+                {userRole === 'lab' ? 'Upcoming Lab Tests' : 'Upcoming Appointments'}
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">

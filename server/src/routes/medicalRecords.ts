@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { authenticateJwt, authorizeRoles } from '../auth';
 import { MedicalRecord } from '../models';
 import { getIO } from '../socket';
+import { classifyMedicalRecordType } from '../services/bayes';
 
 export const medicalRecordsRouter = Router();
 medicalRecordsRouter.use(authenticateJwt);
@@ -85,6 +86,13 @@ medicalRecordsRouter.post('/', authorizeRoles('doctor', 'nurse', 'admin'), async
     io.to(String(created.createdBy)).emit('medicalRecord:new', payload);
   }
   res.status(201).json(created);
+});
+
+// Classify likely medical record type from text
+medicalRecordsRouter.post('/classify-type', authorizeRoles('doctor', 'nurse', 'admin'), async (req: Request, res: Response) => {
+  const { title, summary, diagnosis } = req.body ?? {};
+  const result = classifyMedicalRecordType({ title, summary, diagnosis });
+  res.json(result);
 });
 
 // Update medical record

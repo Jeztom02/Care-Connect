@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Eye, EyeOff, Heart, User, Mail, Lock } from "lucide-react";
+import { Eye, EyeOff, Heart, Mail, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
@@ -13,20 +12,11 @@ export const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
-    password: "",
-    role: ""
+    password: ""
   });
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-
-  const roles = [
-    { value: "admin", label: "Admin" },
-    { value: "doctor", label: "Doctor" },
-    { value: "nurse", label: "Nurse" },
-    { value: "patient", label: "Patient" },
-    { value: "family", label: "Family Member" }
-  ];
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -35,7 +25,7 @@ export const Login = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.email || !formData.password || !formData.role) {
+    if (!formData.email || !formData.password) {
       toast({
         title: "Missing Information",
         description: "Please fill in all fields to continue.",
@@ -55,8 +45,7 @@ export const Login = () => {
         },
         body: JSON.stringify({ 
           email: formData.email.trim().toLowerCase(), 
-          password: formData.password,
-          role: formData.role
+          password: formData.password
         }),
         credentials: 'include' // Important for httpOnly cookies
       });
@@ -204,38 +193,6 @@ export const Login = () => {
                     {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                   </button>
                 </div>
-              </div>
-
-              {/* Role Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="role" className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <User className="h-4 w-4 text-primary" />
-                  Your Role
-                </Label>
-                <Select 
-                  name="role"
-                  value={formData.role} 
-                  onValueChange={(value) => handleInputChange("role", value)}
-                  aria-required="true"
-                >
-                  <SelectTrigger 
-                    className="medical-input"
-                    aria-label="Select your role"
-                  >
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {roles.map((role) => (
-                      <SelectItem 
-                        key={role.value} 
-                        value={role.value}
-                        className="hover:bg-muted focus:bg-muted"
-                      >
-                        {role.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               {/* Submit Button */}

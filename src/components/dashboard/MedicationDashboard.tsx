@@ -5,7 +5,7 @@ import { useMedicationSocket } from '@/hooks/useMedicationSocket';
 import { useToast } from '../ui/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Search, Plus, Bell, CheckCircle, Clock, AlertCircle, Pill, User, Pencil, Trash2 } from 'lucide-react';
+import { Search, Plus, Bell, CheckCircle, Clock, AlertCircle, Pill, User, Pencil, Trash2, FileText } from 'lucide-react';
 import authService from '@/services/authService';
 import {
   Select,
@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select';
 import patientService from '@/services/patientService';
 import medicationService, { Medication, MedicationStats } from '@/services/medicationService';
+import prescriptionService, { Prescription } from '@/services/prescriptionService';
 import {
   Card,
   CardContent,
@@ -91,6 +92,7 @@ const MedicationDashboard = ({ patientId }: MedicationDashboardProps) => {
     queryKey: ['currentUser'],
     queryFn: () => authService.getUser(),
   });
+  const isDoctor = !!(user && String(user.role).toLowerCase() === 'doctor');
 
   // Fetch patients data based on user role
   const { 
@@ -154,11 +156,18 @@ const MedicationDashboard = ({ patientId }: MedicationDashboardProps) => {
   });
 
   const fetchMedications = async (patientId?: string) => {
-    if (!patientId) return [];
+    if (!patientId) {
+      console.log('[MedicationDashboard] No patient ID provided');
+      return [];
+    }
     try {
-      return await medicationService.getPatientMedications(patientId);
+      console.log('[MedicationDashboard] Fetching medications for patient:', patientId);
+      // Fetch combined medications and prescriptions
+      const result = await medicationService.getCombinedMedications(patientId);
+      console.log('[MedicationDashboard] Received medications:', result.length, 'items');
+      return result;
     } catch (error) {
-      console.error('Error fetching medications:', error);
+      console.error('[MedicationDashboard] Error fetching medications:', error);
       toast({
         title: 'Error',
         description: 'Failed to load medications. Please try again later.',
@@ -170,12 +179,24 @@ const MedicationDashboard = ({ patientId }: MedicationDashboardProps) => {
 
   // Determine the patient ID to use based on user role
   const targetPatientId = useMemo(() => {
+    console.log('[MedicationDashboard] Calculating targetPatientId', { 
+      propPatientId: patientId, 
+      userRole: user?.role, 
+      userId: user?.id,
+      patientsCount: patients?.length,
+      firstPatientId: patients?.[0]?._id 
+    });
+    
     // If we have a patientId prop, use that (for staff viewing a specific patient)
     if (patientId) return patientId;
     
-    // If user is a patient, use their own ID
-    if (user?.role?.toUpperCase() === 'PATIENT' && user?.id) {
-      return user.id;
+    // If user is a patient, use the patient ID from the fetched patient record
+    if (user?.role?.toUpperCase() === 'PATIENT') {
+      if (Array.isArray(patients) && patients.length > 0 && patients[0]?._id) {
+        return patients[0]._id;
+      }
+      // Fallback to user.id if patient record not yet loaded
+      return user?.id || '';
     }
     
     // For staff, use the first patient in the list if available
@@ -602,7 +623,7 @@ const MedicationDashboard = ({ patientId }: MedicationDashboardProps) => {
       <div>
         <h1 className="text-3xl font-bold">Medication Dashboard</h1>
         <p className="text-muted-foreground">
-          Manage and track patient medications and reminders
+          Manage and track patient medications and doctor prescriptions
         </p>
       </div>
       <div className="flex gap-2 w-full md:w-auto">
@@ -623,11 +644,13 @@ const MedicationDashboard = ({ patientId }: MedicationDashboardProps) => {
             resetForm();
           }
         }}>
-          <DialogTrigger asChild>
-            <Button onClick={handleOpenAddDialog}>
-              <Plus className="mr-2 h-4 w-4" /> Add Medication
-            </Button>
-          </DialogTrigger>
+          {isDoctor && (
+            <DialogTrigger asChild>
+              <Button onClick={handleOpenAddDialog}>
+                <Plus className="mr-2 h-4 w-4" /> Add Medication
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent>
             <form onSubmit={handleAddMedication}>
               <DialogHeader>
@@ -820,11 +843,71 @@ const MedicationDashboard = ({ patientId }: MedicationDashboardProps) => {
       </div>
     </div>
 
+      {/* Statistics Cards */}
+      {displayMedications.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-4">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Items</CardTitle>
+              <Pill className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{displayMedications.length}</div>
+              <p className="text-xs text-muted-foreground">
+                Medications & prescriptions
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">From Medications</CardTitle>
+              <Pill className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {displayMedications.filter((m: any) => m.source !== 'prescription').length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Direct medication entries
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">From Prescriptions</CardTitle>
+              <FileText className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {displayMedications.filter((m: any) => m.source === 'prescription').length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Doctor prescribed items
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Status</CardTitle>
+              <CheckCircle className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {displayMedications.filter((m: any) => m.status === 'Active' || m.status === 'taken').length}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Currently active items
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
     <Card>
       <CardHeader>
         <CardTitle>Medication List</CardTitle>
         <CardDescription>
-          View and manage all medications
+          View and manage all medications including prescriptions from doctors
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -836,20 +919,35 @@ const MedicationDashboard = ({ patientId }: MedicationDashboardProps) => {
                 <TableHead>Medication</TableHead>
                 <TableHead>Dosage</TableHead>
                 <TableHead>Frequency</TableHead>
+                <TableHead>Source</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Next Dose</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {displayMedications.map((medication) => (
+              {displayMedications.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    No medications or prescriptions found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                displayMedications.map((medication) => {
+                  const isPrescription = (medication as any).source === 'prescription';
+                  const isEditable = !isPrescription && isDoctor;
+                  
+                  return (
                 <TableRow key={medication._id}>
                   <TableCell className="font-medium">
                     {(() => {
                       const patientId = medication.patientId;
-                      const getPatientName = (patientId: string | { _id: string; name: string } | null) => {
+                      const getPatientName = (patientId: string | { _id: string; name: string; firstName?: string; lastName?: string } | null) => {
                         if (!patientId) return 'Unknown Patient';
                         if (typeof patientId === 'object' && patientId !== null) {
+                          if (patientId.firstName || patientId.lastName) {
+                            return `${patientId.firstName || ''} ${patientId.lastName || ''}`.trim();
+                          }
                           return patientId.name || 'Unknown Patient';
                         }
                         const patient = patients.find(p => p.id === patientId || p._id === patientId);
@@ -863,82 +961,106 @@ const MedicationDashboard = ({ patientId }: MedicationDashboardProps) => {
                   <TableCell>{medication.frequency}</TableCell>
                   <TableCell>
                     <Badge
+                      variant={isPrescription ? 'default' : 'outline'}
+                      className={isPrescription ? 'bg-blue-100 text-blue-700 border-blue-300' : ''}
+                    >
+                      {isPrescription && <FileText className="mr-1 h-3 w-3" />}
+                      {isPrescription ? 'Prescription' : 'Medication'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
                       variant={
-                        medication.status === 'taken'
+                        medication.status === 'taken' || medication.status === 'Active'
                           ? 'default'
-                          : medication.status === 'pending'
+                          : medication.status === 'pending' || medication.status === 'Pending'
                           ? 'outline'
                           : 'secondary'
                       }
                       className={medication.status === 'missed' ? 'bg-destructive/10 text-destructive' : ''}
                     >
-                      {medication.status === 'taken' && <CheckCircle className="mr-1 h-3 w-3" />}
+                      {(medication.status === 'taken' || medication.status === 'Active') && <CheckCircle className="mr-1 h-3 w-3" />}
                       {medication.status === 'missed' && <AlertCircle className="mr-1 h-3 w-3" />}
                       {medication.status.charAt(0).toUpperCase() + medication.status.slice(1)}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {medication.nextDose ? format(new Date(medication.nextDose), 'MMM d, yyyy h:mm a') : 'N/A'}
+                    {medication.nextDose ? format(new Date(medication.nextDose), 'MMM d, yyyy h:mm a') : 
+                     medication.startDate ? format(new Date(medication.startDate), 'MMM d, yyyy') : 'N/A'}
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleEditMedication(medication)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Pencil className="h-4 w-4" />
-                        <span className="sr-only">Edit</span>
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleDeleteMedication(medication._id)}
-                        disabled={deleteMedicationMutation.isPending}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                      >
-                        {deleteMedicationMutation.isPending ? (
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
-                        ) : (
-                          <Trash2 className="h-4 w-4" />
-                        )}
-                        <span className="sr-only">Delete</span>
-                      </Button>
-                      <Button
-                        variant={medication.isReminderSet ? 'outline' : 'ghost'}
-                        size="sm"
-                        onClick={async () => {
-                          try {
-                            // Use the toggleReminderMutation directly since it already handles verification
-                            await toggleReminderMutation.mutateAsync({
-                              id: medication._id,
-                              reminderTime: medication.reminderTime || '09:00',
-                            });
-                          } catch (error) {
-                            console.error('Error toggling reminder:', error);
-                            // Error handling is already done in the mutation's onError
-                          }
-                        }}
-                        disabled={toggleReminderMutation.isPending}
-                        className="h-8 w-8 p-0"
-                      >
-                        {toggleReminderMutation.isPending ? (
-                          <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                        ) : (
-                          <Bell 
-                            className={`h-4 w-4 ${medication.isReminderSet ? 'text-primary' : ''}`} 
-                            fill={medication.isReminderSet ? 'currentColor' : 'none'}
-                          />
-                        )}
-                        <span className="sr-only">
-                          {medication.isReminderSet ? 'Disable' : 'Enable'} reminder
-                        </span>
-                      </Button>
+                      {isEditable && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleEditMedication(medication)}
+                            className="h-8 w-8 p-0"
+                            title="Edit medication"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            <span className="sr-only">Edit</span>
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDeleteMedication(medication._id)}
+                            disabled={deleteMedicationMutation.isPending}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                            title="Delete medication"
+                          >
+                            {deleteMedicationMutation.isPending ? (
+                              <div className="h-4 w-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
+                            ) : (
+                              <Trash2 className="h-4 w-4" />
+                            )}
+                            <span className="sr-only">Delete</span>
+                          </Button>
+                        </>
+                      )}
+                      {isPrescription ? (
+                        <Badge variant="secondary" className="text-xs">
+                          <FileText className="mr-1 h-3 w-3" />
+                          From Doctor
+                        </Badge>
+                      ) : (
+                        <Button
+                          variant={medication.isReminderSet ? 'outline' : 'ghost'}
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              await toggleReminderMutation.mutateAsync({
+                                id: medication._id,
+                                reminderTime: medication.reminderTime || '09:00',
+                              });
+                            } catch (error) {
+                              console.error('Error toggling reminder:', error);
+                            }
+                          }}
+                          disabled={toggleReminderMutation.isPending}
+                          className="h-8 w-8 p-0"
+                          title={medication.isReminderSet ? 'Disable reminder' : 'Enable reminder'}
+                        >
+                          {toggleReminderMutation.isPending ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                          ) : (
+                            <Bell 
+                              className={`h-4 w-4 ${medication.isReminderSet ? 'text-primary' : ''}`} 
+                              fill={medication.isReminderSet ? 'currentColor' : 'none'}
+                            />
+                          )}
+                          <span className="sr-only">
+                            {medication.isReminderSet ? 'Disable' : 'Enable'} reminder
+                          </span>
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                  );
+                })
+              )}
             </TableBody>
           </Table>
         </div>

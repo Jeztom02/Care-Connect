@@ -11,6 +11,10 @@ import { SearchBar } from "@/components/SearchBar";
 import { AddNoteDialog } from "@/components/patient/AddNoteDialog";
 import { UpdateVitalsDialog } from "@/components/patient/UpdateVitalsDialog";
 import { EmergencyAlertDialog } from "@/components/patient/EmergencyAlertDialog";
+import { CarePathRecommendation } from "@/components/patient/CarePathRecommendation";
+import { DischargeReadiness } from "@/components/patient/DischargeReadiness";
+import { SimilarPatientsComponent } from "@/components/patient/SimilarPatients";
+import { DoctorRecommendation } from "@/components/patient/DoctorRecommendation";
 import { patientCareApi } from "@/services/patientCareService";
 import { useToast } from "@/components/ui/use-toast";
 
@@ -191,6 +195,8 @@ export const PatientCare = () => {
     const index = formattedPatients.findIndex(p => p.id === patientId);
     if (index !== -1) {
       setSelectedPatientIndex(index);
+      // Trigger Decision Tree refresh when patient changes
+      setRefreshTrigger(prev => prev + 1);
     }
   };
 
@@ -325,6 +331,9 @@ export const PatientCare = () => {
       
       // Refresh the vitals for the current patient
       await fetchPatientVitals(currentPatient.id);
+      
+      // Trigger Decision Tree components to refresh with new vitals
+      setRefreshTrigger(prev => prev + 1);
     } catch (error: any) {
       console.error("Error updating vitals:", error);
       
@@ -755,9 +764,36 @@ export const PatientCare = () => {
               onOpenChange={setIsEmergencyAlertOpen}
               onAlert={handleEmergencyAlert}
               isLoading={isLoading}
+              patientId={currentPatient?.id}
             />
           </CardContent>
         </Card>
+
+        {/* AI Decision Tree Components */}
+        <div className="lg:col-span-3 space-y-6">
+          <CarePathRecommendation 
+            patientId={currentPatient.id}
+            patientName={currentPatient.name}
+            refreshTrigger={refreshTrigger}
+          />
+          
+          <DischargeReadiness 
+            patientId={currentPatient.id}
+            patientName={currentPatient.name}
+            refreshTrigger={refreshTrigger}
+          />
+
+          <SimilarPatientsComponent 
+            patientId={currentPatient.id}
+            patientName={currentPatient.name}
+          />
+
+          <DoctorRecommendation 
+            patientId={currentPatient.id}
+            patientName={currentPatient.name}
+            patientCondition={currentPatient.condition}
+          />
+        </div>
       </div>
     </div>
   );

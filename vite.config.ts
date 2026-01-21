@@ -21,8 +21,8 @@ export default defineConfig(({ mode }) => {
     publicDir: 'public',
     server: {
       host: "::",
-      port: 8080,
-      strictPort: true,
+      port: 5173,
+      strictPort: false,
       open: false,
       proxy: {
         "/api": {

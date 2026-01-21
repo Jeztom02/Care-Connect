@@ -477,6 +477,7 @@ export const PatientDashboard = () => {
           await emergencyAlertMutation.mutateAsync(alertData);
         }}
         isLoading={emergencyAlertMutation.isPending}
+        patientId={patientId}
       />
     </div>
   );

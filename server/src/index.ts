@@ -18,9 +18,17 @@ import nurseRouter from './routes/nurse';
 import { patientStatusRouter } from './routes/patientStatus';
 import { careUpdatesRouter } from './routes/careUpdates';
 import { medicationsRouter } from './routes/medications';
+import { equipmentRouter } from './routes/equipment';
 import { adminRouter } from './routes/admin';
 import { uploadsRouter } from './routes/uploads';
+import { labRouter } from './routes/lab';
+import { pharmacyRouter } from './routes/pharmacy';
+import pharmacyOrdersRouter from './routes/pharmacyOrders';
+import { paymentsRouter } from './routes/payments';
 import { patientCareRouter } from './routes/patientCare';
+import aiInsightsRouter from './routes/aiInsights';
+import decisionTreeRouter from './routes/decisionTree';
+import knnRouter from './routes/knn';
 import { connectMongo } from './db';
 import { User, Patient } from './models';
 import crypto from 'crypto';
@@ -42,7 +50,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 
 // Config
-const PORT = Number(process.env.PORT || 3001);
+// Use 3002 as a fallback during local development when 3001 is occupied.
+const PORT = Number(process.env.PORT || 3002);
 // Support multiple allowed origins via comma-separated ORIGIN env
 const ORIGIN = process.env.ORIGIN || 'http://localhost:5173,http://localhost:3000,http://localhost:8080';
 const ALLOWED_ORIGINS = ORIGIN.split(',').map(o => o.trim()).filter(Boolean);
@@ -239,8 +248,20 @@ app.post('/api/auth/register', async (req: Request, res: Response) => {
     }
     const passwordHash = await bcrypt.hash(String(password), 10);
     console.log('[REGISTER] Hash created', { hashPresent: !!passwordHash, hashPrefix: String(passwordHash).slice(0, 7) });
-    const created = await User.create({ email: normalizedEmail, phone: normalizedPhone, name: String(name), role: String(role), passwordHash });
-    console.log('[REGISTER] Success', { id: String(created._id), email: created.email, role: created.role, hasPasswordHash: !!created.passwordHash });
+    
+    // Roles that require admin approval before they can login
+    const requiresApproval = ['doctor', 'nurse', 'pharmacy', 'lab', 'admin'];
+    const approvalStatus = requiresApproval.includes(String(role)) ? 'pending' : 'approved';
+    
+    const created = await User.create({ 
+      email: normalizedEmail, 
+      phone: normalizedPhone, 
+      name: String(name), 
+      role: String(role), 
+      passwordHash,
+      approvalStatus 
+    });
+    console.log('[REGISTER] Success', { id: String(created._id), email: created.email, role: created.role, approvalStatus, hasPasswordHash: !!created.passwordHash });
 
     // Create linked Patient record for patient users
     if (String(role) === 'patient') {
@@ -334,6 +355,17 @@ app.post('/api/auth/login', async (req: Request, res: Response) => {
     if (!passwordMatch) {
       console.warn('[LOGIN] Invalid password', { email: normalizedEmail });
       return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    // Check approval status for staff roles
+    const requiresApproval = ['doctor', 'nurse', 'pharmacy', 'lab', 'admin'];
+    if (requiresApproval.includes(user.role) && (user as any).approvalStatus === 'pending') {
+      console.warn('[LOGIN] Account pending approval', { email: normalizedEmail, role: user.role });
+      return res.status(403).json({ message: 'Your account is pending admin approval. Please wait for approval before logging in.' });
+    }
+    if ((user as any).approvalStatus === 'rejected') {
+      console.warn('[LOGIN] Account rejected', { email: normalizedEmail, role: user.role });
+      return res.status(403).json({ message: 'Your account registration was not approved. Please contact support.' });
     }
 
     const token = signToken({ 
@@ -571,8 +603,16 @@ app.use('/api/nurse', nurseRouter);
 app.use('/api/patient-status', patientStatusRouter);
 app.use('/api/care-updates', careUpdatesRouter);
 app.use('/api/medications', medicationsRouter);
+app.use('/api/equipment', equipmentRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/ai-insights', aiInsightsRouter);
+app.use('/api/decision-tree', decisionTreeRouter);
+app.use('/api/knn', knnRouter);
 app.use('/api/uploads', uploadsRouter);
+app.use('/api/lab', labRouter);
+app.use('/api/pharmacy', pharmacyRouter);
+app.use('/api/pharmacy-orders', pharmacyOrdersRouter);
+app.use('/api/payments', paymentsRouter);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // Error handler

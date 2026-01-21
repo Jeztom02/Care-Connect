@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { authenticateJwt, authorizeRoles } from '../auth';
-import { Alert } from '../models';
+import { Alert, AIClassification } from '../models';
+import { classifyAlertPriority } from '../services/bayes';
 
 export const alertsRouter = Router();
 alertsRouter.use(authenticateJwt);
@@ -38,6 +39,36 @@ alertsRouter.post('/', authorizeRoles('admin', 'doctor'), async (req: Request, r
   if (!title || !message) return res.status(400).json({ message: 'title and message required' });
   const created = await Alert.create({ title, message, patientId, status, createdByUserId: user.sub });
   res.status(201).json(created);
+});
+
+alertsRouter.post('/classify-priority', authorizeRoles('doctor', 'nurse', 'admin'), async (req: Request, res: Response) => {
+  const { title, message, patientId, userSelection } = req.body ?? {};
+  console.log('[AI Classification] Request received:', { title, message, userSelection, patientId });
+  
+  const result = classifyAlertPriority({ title, message });
+  console.log('[AI Classification] Result:', result);
+  
+  // Save AI classification for tracking
+  try {
+    const classification = await AIClassification.create({
+      type: 'alert_priority',
+      inputText: { title, message },
+      aiPrediction: {
+        label: result.label,
+        confidence: Math.round(result.scores[result.label] * 100),
+        scores: result.scores
+      },
+      userSelection,
+      patientId,
+      userId: req.user!.sub,
+      outcome: 'pending'
+    });
+    console.log('[AI Classification] Saved to database:', classification._id);
+  } catch (error) {
+    console.error('[AI Classification] Failed to save:', error);
+  }
+  
+  res.json(result);
 });
 
 // Get individual alert by ID

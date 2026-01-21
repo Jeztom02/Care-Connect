@@ -28,7 +28,7 @@ export const Register = () => {
     fullName: "",
     email: "",
     phone: "",
-    role: "",
+    role: "patient",
     password: "",
     confirmPassword: ""
   });
@@ -40,12 +40,18 @@ export const Register = () => {
   const { toast } = useToast();
 
   const roles = [
-    { value: "admin", label: "Admin" },
+    { value: "patient", label: "Patient" },
+    { value: "family", label: "Family Member" },
     { value: "doctor", label: "Doctor" },
     { value: "nurse", label: "Nurse" },
-    { value: "patient", label: "Patient" },
-    { value: "family", label: "Family Member" }
+    { value: "pharmacy", label: "Pharmacy" },
+    { value: "lab", label: "Lab Technician" },
+    { value: "admin", label: "Admin" }
   ];
+
+  // Roles that require admin approval
+  const requiresApproval = ['doctor', 'nurse', 'pharmacy', 'lab', 'admin'];
+  const selectedRoleRequiresApproval = formData.role && requiresApproval.includes(formData.role);
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -76,10 +82,6 @@ export const Register = () => {
       newErrors.phone = "Enter a valid 10-digit phone number";
     } else if (availability.phone === false) {
       newErrors.phone = "Phone already registered";
-    }
-
-    if (!formData.role) {
-      newErrors.role = "Please select your role";
     }
 
     if (!formData.password) {
@@ -189,10 +191,17 @@ export const Register = () => {
         throw new Error(msg);
       }
 
+      const requiresApprovalRoles = ['doctor', 'nurse', 'pharmacy', 'lab', 'admin'];
+      const needsApproval = requiresApprovalRoles.includes(formData.role);
+
       toast({
         title: "Account created successfully!",
-        description: `Welcome to Care Connect, ${formData.fullName}.`,
+        description: needsApproval 
+          ? `Your ${formData.role} account is pending admin approval. You'll be able to login once approved.`
+          : `Welcome to Care Connect, ${formData.fullName}.`,
+        duration: needsApproval ? 6000 : 3000
       });
+      
       navigate('/login');
     } catch (err) {
       toast({ title: 'Registration error', description: (err as Error).message, variant: 'destructive' });
@@ -334,36 +343,6 @@ export const Register = () => {
                 )}
                 {!errors.phone && isPhoneSyntaxValid && availability.phone === true && (
                   <p className="text-xs text-green-600">Phone is available</p>
-                )}
-              </div>
-
-              {/* Role Selection */}
-              <div className="space-y-2">
-                <Label htmlFor="role" className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <User className="h-4 w-4 text-primary" />
-                  Your Role
-                </Label>
-                <Select value={formData.role} onValueChange={(value) => handleInputChange("role", value)}>
-                  <SelectTrigger className={`medical-input ${errors.role ? 'border-destructive' : ''}`}>
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-card border-border">
-                    {roles.map((role) => (
-                      <SelectItem 
-                        key={role.value} 
-                        value={role.value}
-                        className="hover:bg-muted focus:bg-muted"
-                      >
-                        {role.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {errors.role && (
-                  <p className="text-xs text-destructive flex items-center gap-1">
-                    <span className="text-destructive">⚠</span>
-                    {errors.role}
-                  </p>
                 )}
               </div>
 

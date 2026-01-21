@@ -5,7 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Calendar, Clock, MapPin, User, Plus, Filter, Video, Phone, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAppointments, usePatientUsers } from "@/hooks/useApi";
+import { useAppointments, usePatientUsers, useUsersByRole } from "@/hooks/useApi";
 import { useToast } from "@/hooks/use-toast";
 import { useSocket } from "@/hooks/useSocket";
 import { Input } from "@/components/ui/input";
@@ -20,14 +20,25 @@ interface CreateAppointmentInlineProps {
   patients: any[];
   patientsLoading?: boolean;
   onCreate: () => void;
+  userRole: string;
+  doctors?: any[];
+  doctorsLoading?: boolean;
 }
 
-export function CreateAppointmentInline({ open, onClose, form, setForm, patients, patientsLoading, onCreate }: CreateAppointmentInlineProps) {
+export function CreateAppointmentInline({ open, onClose, form, setForm, patients, patientsLoading, onCreate, userRole, doctors, doctorsLoading }: CreateAppointmentInlineProps) {
   const [selectOpen, setSelectOpen] = useState(false);
   useEffect(() => {
     if (open) setSelectOpen(true);
   }, [open]);
   if (!open) return null;
+  
+  const isPatient = userRole === 'patient';
+  const selectList = isPatient ? (doctors || []) : patients;
+  const selectLoading = isPatient ? doctorsLoading : patientsLoading;
+  const selectLabel = isPatient ? 'Select doctor' : 'Select patient';
+  const emptyMessage = isPatient ? 'No doctors found' : 'No patients found';
+  const formKey = isPatient ? 'doctorId' : 'patientId';
+  
   return (
     <Card className="mt-4">
       <CardHeader>
@@ -35,22 +46,25 @@ export function CreateAppointmentInline({ open, onClose, form, setForm, patients
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          <Select open={selectOpen} onOpenChange={setSelectOpen} value={form.patientId} onValueChange={(v) => { setForm((f: any) => ({ ...f, patientId: v })); setSelectOpen(false); }}>
-            <SelectTrigger><SelectValue placeholder="Select patient" /></SelectTrigger>
+          <Select open={selectOpen} onOpenChange={setSelectOpen} value={form[formKey]} onValueChange={(v) => { setForm((f: any) => ({ ...f, [formKey]: v })); setSelectOpen(false); }}>
+            <SelectTrigger><SelectValue placeholder={selectLabel} /></SelectTrigger>
             <SelectContent>
-              {patientsLoading ? (
+              {selectLoading ? (
                 <SelectItem value="loading" disabled>
-                  Loading patients...
+                  Loading {isPatient ? 'doctors' : 'patients'}...
                 </SelectItem>
-              ) : patients.length === 0 ? (
+              ) : selectList.length === 0 ? (
                 <SelectItem value="empty" disabled>
-                  No patients found
+                  {emptyMessage}
                 </SelectItem>
               ) : (
-                patients.map((p: any) => (
-                  <SelectItem key={p._id} value={p._id}>
-                    {(p.firstName || p.lastName ? `${[p.firstName, p.lastName].filter(Boolean).join(' ')}` : p.name)}
-                    {p.roomNumber ? ` (Room ${p.roomNumber})` : p._id ? ` (${String(p._id).slice(-6)})` : ''}
+                selectList.map((item: any) => (
+                  <SelectItem key={item._id} value={item._id}>
+                    {isPatient ? (
+                      `${item.name || 'Unknown'}${item.specialization ? ` – ${item.specialization}` : ''}`
+                    ) : (
+                      `${(item.firstName || item.lastName ? `${[item.firstName, item.lastName].filter(Boolean).join(' ')}` : item.name)}${item.roomNumber ? ` (Room ${item.roomNumber})` : item._id ? ` (${String(item._id).slice(-6)})` : ''}`
+                    )}
                   </SelectItem>
                 ))
               )}
@@ -91,8 +105,9 @@ export function Appointments({ userRole }: AppointmentsProps) {
   const { toast } = useToast();
   const { on, off } = useSocket();
   const { data: patientsData, loading: patientsLoading } = usePatientUsers();
+  const { data: doctorsData, loading: doctorsLoading } = useUsersByRole('doctor');
   const [creating, setCreating] = useState(false);
-  const [form, setForm] = useState<{ patientId?: string; title?: string; startsAt?: string; endsAt?: string; mode?: string; location?: string; notes?: string }>({ mode: 'In-person' });
+  const [form, setForm] = useState<{ patientId?: string; doctorId?: string; title?: string; startsAt?: string; endsAt?: string; mode?: string; location?: string; notes?: string }>({ mode: 'In-person' });
   const [reschedulingId, setReschedulingId] = useState<string | null>(null);
   const [rescheduleForm, setRescheduleForm] = useState<{ startsAt?: string; endsAt?: string; status?: string }>({});
 
@@ -267,10 +282,17 @@ export function Appointments({ userRole }: AppointmentsProps) {
         setForm={setForm}
         patients={Array.isArray(patientsData) ? (patientsData as any[]) : []}
         patientsLoading={!!patientsLoading}
+        userRole={userRole}
+        doctors={Array.isArray(doctorsData) ? (doctorsData as any[]) : []}
+        doctorsLoading={!!doctorsLoading}
         onCreate={async () => {
           try {
-            if (!form.patientId || !form.startsAt) {
-              toast({ title: 'Missing required fields', description: 'Patient and start time are required', variant: 'destructive' });
+            const isPatient = userRole === 'patient';
+            const requiredField = isPatient ? form.doctorId : form.patientId;
+            const fieldName = isPatient ? 'Doctor' : 'Patient';
+            
+            if (!requiredField || !form.startsAt) {
+              toast({ title: 'Missing required fields', description: `${fieldName} and start time are required`, variant: 'destructive' });
               return;
             }
             // Auto-calculate endsAt if not provided (default 30 minutes)

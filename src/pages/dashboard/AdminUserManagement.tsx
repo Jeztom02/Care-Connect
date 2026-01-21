@@ -239,6 +239,8 @@ export const AdminUserManagement = () => {
       case "patient": return "bg-purple-100 text-purple-700";
       case "family": return "bg-orange-100 text-orange-700";
       case "volunteer": return "bg-yellow-100 text-yellow-700";
+      case "lab": return "bg-indigo-100 text-indigo-700";
+      case "pharmacy": return "bg-emerald-100 text-emerald-700";
       default: return "bg-gray-100 text-gray-700";
     }
   };
@@ -286,6 +288,8 @@ export const AdminUserManagement = () => {
                   <SelectItem value="patient">Patient</SelectItem>
                   <SelectItem value="family">Family</SelectItem>
                   <SelectItem value="volunteer">Volunteer</SelectItem>
+                  <SelectItem value="lab">Lab</SelectItem>
+                  <SelectItem value="pharmacy">Pharmacy</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -348,6 +352,8 @@ export const AdminUserManagement = () => {
                           <SelectItem value="patient">Patient</SelectItem>
                           <SelectItem value="family">Family</SelectItem>
                           <SelectItem value="volunteer">Volunteer</SelectItem>
+                          <SelectItem value="lab">Lab</SelectItem>
+                          <SelectItem value="pharmacy">Pharmacy</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -535,6 +541,8 @@ export const AdminUserManagement = () => {
                   <SelectItem value="patient">Patient</SelectItem>
                   <SelectItem value="family">Family</SelectItem>
                   <SelectItem value="volunteer">Volunteer</SelectItem>
+                  <SelectItem value="lab">Lab Technician</SelectItem>
+                  <SelectItem value="pharmacy">Pharmacy</SelectItem>
                 </SelectContent>
               </Select>
             </div>
